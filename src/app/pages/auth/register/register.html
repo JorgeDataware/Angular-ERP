@@ -1,0 +1,105 @@
+<div class="register-container">
+  <div class="register-card">
+    <div class="register-header">
+      <a routerLink="/home/landing" class="back-link">
+        <i class="pi pi-arrow-left"></i>
+      </a>
+      <div class="register-brand">
+        <i class="pi pi-box" style="font-size: 2rem; color: var(--p-primary-color)"></i>
+        <h1>ERP System</h1>
+      </div>
+      <p class="register-subtitle">Crea tu cuenta</p>
+    </div>
+
+    <form (ngSubmit)="onRegister()" class="register-form">
+      <div class="field">
+        <label for="name">Nombre completo</label>
+        <input
+          id="name"
+          type="text"
+          pInputText
+          placeholder="Tu nombre completo"
+          [ngModel]="name()"
+          (ngModelChange)="name.set($event)"
+          name="name"
+          class="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="email">Correo electronico</label>
+        <input
+          id="email"
+          type="email"
+          pInputText
+          placeholder="correo@ejemplo.com"
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+          name="email"
+          class="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="password">Contrasena</label>
+        <p-password
+          id="password"
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event)"
+          name="password"
+          placeholder="Crea una contrasena"
+          [toggleMask]="true"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="confirmPassword">Confirmar contrasena</label>
+        <p-password
+          id="confirmPassword"
+          [ngModel]="confirmPassword()"
+          (ngModelChange)="confirmPassword.set($event)"
+          name="confirmPassword"
+          placeholder="Repite tu contrasena"
+          [toggleMask]="true"
+          [feedback]="false"
+          styleClass="w-full"
+          inputStyleClass="w-full"
+        />
+      </div>
+
+      <div class="field-checkbox">
+        <p-checkbox
+          [ngModel]="acceptTerms()"
+          (ngModelChange)="acceptTerms.set($event)"
+          name="acceptTerms"
+          [binary]="true"
+          label="Acepto los terminos y condiciones"
+        />
+      </div>
+
+      <p-button
+        type="submit"
+        label="Crear cuenta"
+        icon="pi pi-user-plus"
+        styleClass="w-full"
+      />
+    </form>
+
+    <p-divider align="center">
+      <span class="divider-text">o</span>
+    </p-divider>
+
+    <div class="register-footer">
+      <p>Ya tienes cuenta?
+        <a routerLink="/auth/login" class="login-link">Inicia sesion</a>
+      </p>
+      <p class="home-link-wrapper">
+        <a routerLink="/home/landing" class="home-link">
+          <i class="pi pi-home"></i> Volver al inicio
+        </a>
+      </p>
+    </div>
+  </div>
+</div>

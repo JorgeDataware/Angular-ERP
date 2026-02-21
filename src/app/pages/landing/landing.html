@@ -1,0 +1,136 @@
+<div class="landing-container">
+  <!-- Hero Section -->
+  <header class="landing-header">
+    <nav class="landing-nav">
+      <div class="nav-brand">
+        <i class="pi pi-box" style="font-size: 1.75rem; color: var(--p-primary-color)"></i>
+        <span class="brand-text">ERP System</span>
+      </div>
+      <div class="nav-actions">
+        <p-button
+          label="Iniciar Sesion"
+          [outlined]="true"
+          routerLink="/auth/login"
+        />
+        <p-button
+          label="Registrarse"
+          routerLink="/auth/register"
+        />
+      </div>
+    </nav>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero-section">
+    <div class="hero-content">
+      <h1 class="hero-title">Gestiona tu empresa de forma inteligente</h1>
+      <p class="hero-subtitle">
+        Plataforma integral de planificacion de recursos empresariales.
+        Controla inventarios, finanzas, ventas y mas desde un solo lugar.
+      </p>
+      <div class="hero-actions">
+        <p-button
+          label="Comenzar ahora"
+          icon="pi pi-arrow-right"
+          iconPos="right"
+          size="large"
+          routerLink="/auth/register"
+        />
+        <p-button
+          label="Ya tengo cuenta"
+          icon="pi pi-sign-in"
+          size="large"
+          [outlined]="true"
+          routerLink="/auth/login"
+        />
+      </div>
+    </div>
+  </section>
+
+  <p-divider />
+
+  <!-- Features Section -->
+  <section class="features-section">
+    <h2 class="section-title">Todo lo que necesitas</h2>
+    <p class="section-subtitle">Herramientas poderosas para cada area de tu negocio</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-chart-bar"></i>
+        </div>
+        <h3>Reportes y Analiticas</h3>
+        <p>Visualiza el rendimiento de tu negocio con dashboards interactivos y reportes detallados.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-warehouse"></i>
+        </div>
+        <h3>Control de Inventario</h3>
+        <p>Gestiona tus productos, stock y almacenes en tiempo real con alertas automaticas.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-dollar"></i>
+        </div>
+        <h3>Finanzas</h3>
+        <p>Lleva el control de ingresos, egresos, facturacion y flujo de caja de manera eficiente.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-users"></i>
+        </div>
+        <h3>Recursos Humanos</h3>
+        <p>Administra empleados, nominas, asistencias y evaluaciones de desempeno.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-shopping-cart"></i>
+        </div>
+        <h3>Ventas</h3>
+        <p>Gestiona clientes, cotizaciones, ordenes de venta y seguimiento de oportunidades.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <i class="pi pi-shield"></i>
+        </div>
+        <h3>Seguridad</h3>
+        <p>Control de acceso basado en roles, auditoria de acciones y proteccion de datos.</p>
+      </div>
+    </div>
+  </section>
+
+  <p-divider />
+
+  <!-- CTA Section -->
+  <section class="cta-section">
+    <h2>Listo para transformar tu negocio?</h2>
+    <p>Unete a las empresas que ya gestionan sus recursos de manera eficiente.</p>
+    <div class="cta-actions">
+      <p-button
+        label="Crear cuenta gratis"
+        icon="pi pi-user-plus"
+        size="large"
+        routerLink="/auth/register"
+      />
+      <p-button
+        label="Iniciar sesion"
+        icon="pi pi-sign-in"
+        size="large"
+        severity="secondary"
+        [outlined]="true"
+        routerLink="/auth/login"
+      />
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="landing-footer">
+    <p>&copy; 2026 ERP System. Todos los derechos reservados.</p>
+  </footer>
+</div>
