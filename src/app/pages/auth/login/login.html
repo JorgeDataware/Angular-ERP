@@ -1,4 +1,6 @@
 <div class="login-container">
+  <p-toast />
+  
   <div class="login-card">
     <div class="login-header">
       <a routerLink="/home/landing" class="back-link">
@@ -12,6 +14,10 @@
     </div>
 
     <form (ngSubmit)="onLogin()" class="login-form">
+      @if (errorMessage()) {
+        <p-message severity="error" [text]="errorMessage()" styleClass="w-full mb-3" />
+      }
+
       <div class="field">
         <label for="email">Correo electronico</label>
         <input
@@ -23,6 +29,7 @@
           (ngModelChange)="email.set($event)"
           name="email"
           class="w-full"
+          required
         />
       </div>
 
@@ -38,17 +45,21 @@
           [feedback]="false"
           styleClass="w-full"
           inputStyleClass="w-full"
+          required
         />
       </div>
 
       <div class="field-row">
-        <p-checkbox
-          [ngModel]="rememberMe()"
-          (ngModelChange)="rememberMe.set($event)"
-          name="rememberMe"
-          [binary]="true"
-          label="Recordarme"
-        />
+        <div class="checkbox-wrapper">
+          <p-checkbox
+            [ngModel]="rememberMe()"
+            (ngModelChange)="rememberMe.set($event)"
+            name="rememberMe"
+            [binary]="true"
+            inputId="rememberMe"
+          />
+          <label for="rememberMe" class="checkbox-label">Recordarme</label>
+        </div>
         <a class="forgot-link" href="#">Olvidaste tu contrasena?</a>
       </div>
 
@@ -58,6 +69,13 @@
         icon="pi pi-sign-in"
         styleClass="w-full"
       />
+
+      <div class="credentials-hint">
+        <small>
+          <i class="pi pi-info-circle"></i>
+          Credenciales de prueba: admin@erp.com / Admin@2025!
+        </small>
+      </div>
     </form>
 
     <p-divider align="center">

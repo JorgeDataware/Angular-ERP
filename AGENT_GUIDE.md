@@ -83,12 +83,12 @@ src/app/
     └── auth/                 # Authentication pages
         ├── auth.routes.ts    # Routes: login, register
         ├── login/
-        │   ├── login.ts      # Component (signals: email, password, rememberMe)
-        │   ├── login.html    # Login form with PrimeNG inputs
+        │   ├── login.ts      # Component (hardcoded credentials, validation, toast notifications)
+        │   ├── login.html    # Login form with PrimeNG inputs & validation messages
         │   └── login.css
         └── register/
-            ├── register.ts   # Component (signals: name, email, password, confirmPassword, acceptTerms)
-            ├── register.html # Registration form with PrimeNG inputs
+            ├── register.ts   # Component (full validation, computed signals, phone/password rules)
+            ├── register.html # Registration form with PrimeNG inputs & real-time validation
             └── register.css
 ```
 
@@ -181,6 +181,14 @@ export class <Name> {
 | `CheckboxModule` | `primeng/checkbox` | Login, Register |
 | `DividerModule` | `primeng/divider` | Landing, Login, Register |
 | `RippleModule` | `primeng/ripple` | Landing |
+| `MessageModule` | `primeng/message` | Login, Register |
+| `ToastModule` | `primeng/toast` | Login, Register |
+
+### Services Used
+
+| Service | Import Path | Purpose |
+|---|---|---|
+| `MessageService` | `primeng/api` | Toast notifications for success/error messages |
 
 ### Theme / Styling
 
@@ -194,6 +202,93 @@ export class <Name> {
 1. Import the module in the component's `imports` array (no need for app-level registration)
 2. Use PrimeNG CSS variables for consistent theming
 3. Reference: https://primeng.org/
+
+### PrimeNG Checkbox Labels
+
+⚠️ **Important**: The `label` attribute on `p-checkbox` does NOT render visually in PrimeNG 21.x.
+
+**Correct pattern:**
+```html
+<div class="field-checkbox">
+  <p-checkbox
+    [ngModel]="field()"
+    (ngModelChange)="field.set($event)"
+    name="field"
+    [binary]="true"
+    inputId="field"
+  />
+  <label for="field" class="checkbox-label">Label text</label>
+</div>
+```
+
+**CSS for checkbox labels:**
+```css
+.field-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-label {
+  font-size: 0.9rem;
+  color: var(--p-surface-700);
+  cursor: pointer;
+  user-select: none;
+}
+```
+
+---
+
+## Authentication Implementation
+
+### Login Component
+
+**Hardcoded credentials for simulation:**
+- Email: `admin@erp.com`
+- Password: `Admin@2025!`
+
+**Features:**
+- Credential validation with hardcoded values
+- Error messages using `p-message` (inline)
+- Success/error notifications with `MessageService` toast
+- Visual hint showing test credentials
+- Form validation (required fields)
+
+### Register Component
+
+**Required fields:**
+- `username` — Username
+- `fullName` — Full name
+- `email` — Email address
+- `password` — Password (min 10 chars + special symbols)
+- `confirmPassword` — Password confirmation
+- `phone` — Phone number (digits only, min 10)
+- `address` — Address
+- `isAdult` — Checkbox: "Acepto que soy mayor de edad"
+- `acceptTerms` — Checkbox: "Acepto los términos y condiciones"
+
+**Password validation rules:**
+- Minimum 10 characters
+- Must include at least one special symbol: `!@#$%^&*`
+- Real-time validation with error messages
+
+**Phone validation:**
+- Numeric input only (auto-filtered)
+- Minimum 10 digits
+- Maximum 15 characters
+
+**Form behavior:**
+- Submit button disabled until all validations pass
+- Uses `computed()` signals for reactive validation
+- Real-time feedback with color-coded messages (red for errors, green for success)
+- Toast notification on successful registration
+- Auto-redirect to login after 2 seconds on success
+
+**Validation messages:**
+- Password requirements shown with hints
+- Password match/mismatch indicator
+- Phone number format validation
+- Visual feedback for form completeness
 
 ---
 
@@ -281,3 +376,6 @@ Register (/auth/register)
 9. **File naming**: lowercase, no prefix, just `<name>.ts`, `<name>.html`, `<name>.css` (Angular 21 convention, no `.component` suffix).
 10. **Build check**: run `pnpm build` after structural changes to verify compilation.
 11. **Package manager**: always use `pnpm`, never `npm` or `yarn`.
+12. **PrimeNG checkboxes**: Do NOT use the `label` attribute. Always use a separate `<label for="...">` element with matching `inputId`.
+13. **Form validation**: Use `computed()` signals for reactive validation logic. Disable submit buttons when form is invalid.
+14. **User feedback**: Use `MessageService` with `p-toast` for notifications, and `p-message` for inline validation errors.
