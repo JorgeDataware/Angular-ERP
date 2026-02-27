@@ -1,0 +1,53 @@
+<aside class="sidebar" [class.collapsed]="collapsed()">
+  <div class="sidebar-header">
+    @if (!collapsed()) {
+      <span class="sidebar-logo">ERP System</span>
+    }
+    <button
+      class="toggle-btn"
+      (click)="toggleSidebar()"
+      pRipple
+      [attr.aria-label]="collapsed() ? 'Expandir menu' : 'Contraer menu'"
+    >
+      <i [class]="collapsed() ? 'pi pi-angle-right' : 'pi pi-angle-left'"></i>
+    </button>
+  </div>
+
+  <nav class="sidebar-nav">
+    <ul class="menu-list">
+      @for (item of menuItems; track item.label) {
+        <li>
+          <a
+            class="menu-item"
+            href="#"
+            (click)="$event.preventDefault()"
+            pRipple
+            [pTooltip]="collapsed() ? item.label : ''"
+            tooltipPosition="right"
+          >
+            <i [class]="item.icon + ' menu-icon'"></i>
+            @if (!collapsed()) {
+              <span class="menu-label">{{ item.label }}</span>
+            }
+          </a>
+        </li>
+      }
+    </ul>
+  </nav>
+
+  <div class="sidebar-footer">
+    <a
+      class="menu-item logout-item"
+      href="#"
+      (click)="$event.preventDefault()"
+      pRipple
+      [pTooltip]="collapsed() ? 'Cerrar sesion' : ''"
+      tooltipPosition="right"
+    >
+      <i class="pi pi-sign-out menu-icon"></i>
+      @if (!collapsed()) {
+        <span class="menu-label">Cerrar sesion</span>
+      }
+    </a>
+  </div>
+</aside>

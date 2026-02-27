@@ -74,8 +74,10 @@ export class Login {
         rememberMe: this.rememberMe(),
       });
 
-      // Aqui se redigiria al dashboard cuando este implementado
-      // this.router.navigate(['/dashboard']);
+      // Redirigir al dashboard despues de login exitoso
+      setTimeout(() => {
+        this.router.navigate(['/dashboard']);
+      }, 1500);
     } else {
       this.errorMessage.set('Credenciales invalidas. Intenta con admin@erp.com / Admin@2025!');
       this.messageService.add({

@@ -17,6 +17,11 @@ export const routes: Routes = [
     loadChildren: () =>
       import('./pages/auth/auth.routes').then(m => m.authRoutes),
   },
+  {
+    path: 'dashboard',
+    loadChildren: () =>
+      import('./pages/home/home.routes').then(m => m.dashboardRoutes),
+  },
   { path: '', redirectTo: 'home/landing', pathMatch: 'full' },
   { path: '**', redirectTo: 'home/landing' },
 ];
