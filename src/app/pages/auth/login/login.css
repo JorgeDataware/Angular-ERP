@@ -162,6 +162,9 @@
   background-color: var(--p-primary-50);
   border-radius: 6px;
   border-left: 3px solid var(--p-primary-color);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
 .credentials-hint small {

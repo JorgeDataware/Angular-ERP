@@ -140,20 +140,16 @@
   color: var(--p-primary-color);
 }
 
-.error-text {
-  color: var(--p-red-500);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.validation-error {
+  color: #e53e3e;
+  display: block;
   font-size: 0.85rem;
   margin-top: 0.25rem;
 }
 
-.success-text {
-  color: var(--p-green-500);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
+.validation-success {
+  color: #38a169;
+  display: block;
   font-size: 0.85rem;
   margin-top: 0.25rem;
 }

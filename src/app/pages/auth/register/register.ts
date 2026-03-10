@@ -43,18 +43,46 @@ export class Register {
   acceptTerms = signal(false);
 
   // Validaciones computadas
+  usernameError = computed(() => {
+    const val = this.username();
+    if (val.length > 0 && /\s/.test(val)) {
+      return 'El usuario no puede contener espacios en blanco';
+    }
+    return '';
+  });
+
+  fullNameError = computed(() => {
+    const val = this.fullName();
+    if (val.length > 0 && /\s{2,}/.test(val)) {
+      return 'El nombre no puede contener dos espacios seguidos';
+    }
+    return '';
+  });
+
+  emailError = computed(() => {
+    const val = this.email();
+    if (val.length > 0 && /\s/.test(val)) {
+      return 'El correo no puede contener espacios en blanco';
+    }
+    return '';
+  });
+
   passwordErrors = computed(() => {
     const errors: string[] = [];
     const pwd = this.password();
-    
+
+    if (pwd.length > 0 && /\s/.test(pwd)) {
+      errors.push('La contrasena no puede contener espacios en blanco');
+    }
+
     if (pwd.length > 0 && pwd.length < 10) {
       errors.push('La contrasena debe tener al menos 10 caracteres');
     }
-    
+
     if (pwd.length > 0 && !this.hasSpecialChar(pwd)) {
       errors.push(`Debe incluir al menos un simbolo especial (${this.SPECIAL_CHARS})`);
     }
-    
+
     return errors;
   });
 
@@ -74,22 +102,31 @@ export class Register {
     if (phone.length > 0 && !/^\d+$/.test(phone)) {
       return 'El telefono solo debe contener numeros';
     }
-    if (phone.length > 0 && phone.length < 10) {
-      return 'El telefono debe tener al menos 10 digitos';
+    if (phone.length > 0 && phone.length !== 10) {
+      return 'El telefono debe tener exactamente 10 digitos';
     }
     return '';
   });
 
   isFormValid = computed(() => {
+    const user = this.username();
+    const name = this.fullName();
+    const mail = this.email();
+    const pwd = this.password();
+    const phone = this.phone();
+
     return (
-      this.username().trim().length > 0 &&
-      this.fullName().trim().length > 0 &&
-      this.email().trim().length > 0 &&
-      this.password().length >= 10 &&
-      this.hasSpecialChar(this.password()) &&
+      user.trim().length > 0 &&
+      !/\s/.test(user) &&
+      name.trim().length > 0 &&
+      !/\s{2,}/.test(name) &&
+      mail.trim().length > 0 &&
+      !/\s/.test(mail) &&
+      pwd.length >= 10 &&
+      !/\s/.test(pwd) &&
+      this.hasSpecialChar(pwd) &&
       this.passwordsMatch() &&
-      this.phone().length >= 10 &&
-      /^\d+$/.test(this.phone()) &&
+      /^\d{10}$/.test(phone) &&
       this.address().trim().length > 0 &&
       this.isAdult() &&
       this.acceptTerms()
@@ -103,13 +140,6 @@ export class Register {
 
   private hasSpecialChar(str: string): boolean {
     return this.SPECIAL_CHARS.split('').some(char => str.includes(char));
-  }
-
-  onPhoneInput(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    // Filtrar solo numeros
-    const filtered = input.value.replace(/\D/g, '');
-    this.phone.set(filtered);
   }
 
   onRegister(): void {

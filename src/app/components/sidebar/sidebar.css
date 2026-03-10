@@ -37,6 +37,8 @@
   color: var(--p-primary-color);
   white-space: nowrap;
   overflow: hidden;
+  text-decoration: none;
+  cursor: pointer;
 }
 
 .toggle-btn {
@@ -56,6 +58,52 @@
 
 .toggle-btn:hover {
   background-color: var(--p-surface-600);
+}
+
+/* User info */
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--p-surface-700);
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--p-surface-700);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-avatar i {
+  font-size: 1rem;
+  color: var(--p-primary-color);
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.user-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--p-surface-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-role {
+  font-size: 0.75rem;
+  color: var(--p-surface-400);
+  white-space: nowrap;
 }
 
 .sidebar-nav {
@@ -110,6 +158,16 @@
 .sidebar-footer {
   border-top: 1px solid var(--p-surface-700);
   padding: 0.5rem 0;
+}
+
+.version-label {
+  display: block;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--p-surface-500);
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .logout-item:hover {

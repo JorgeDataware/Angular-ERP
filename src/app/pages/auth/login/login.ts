@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, inject } from '@angular/core';
 import { RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ButtonModule } from 'primeng/button';
@@ -9,6 +9,7 @@ import { DividerModule } from 'primeng/divider';
 import { MessageModule } from 'primeng/message';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
+import { AuthService } from '../../../core/services/auth.service';
 
 @Component({
   selector: 'app-login',
@@ -28,21 +29,16 @@ import { MessageService } from 'primeng/api';
   styleUrl: './login.css'
 })
 export class Login {
-  // Credenciales hardcodeadas para simulacion
-  private readonly VALID_CREDENTIALS = {
-    email: 'admin@erp.com',
-    password: 'Admin@2025!'
-  };
+  private authService = inject(AuthService);
+  private messageService = inject(MessageService);
+  private router = inject(Router);
 
   email = signal('');
   password = signal('');
   rememberMe = signal(false);
   errorMessage = signal('');
 
-  constructor(
-    private messageService: MessageService,
-    private router: Router
-  ) {}
+  credentialsHint = this.authService.getCredentialsHint();
 
   onLogin(): void {
     this.errorMessage.set('');
@@ -59,18 +55,21 @@ export class Login {
       return;
     }
 
-    // Validar credenciales
-    if (this.email() === this.VALID_CREDENTIALS.email && 
-        this.password() === this.VALID_CREDENTIALS.password) {
+    // Validar credenciales via AuthService
+    const user = this.authService.login(this.email(), this.password());
+
+    if (user) {
+      const roleLabel = this.authService.getRoleLabel(user.role);
       this.messageService.add({
         severity: 'success',
         summary: 'Exito',
-        detail: 'Inicio de sesion exitoso',
+        detail: `Inicio de sesion exitoso como ${roleLabel}`,
         life: 3000
       });
-      
+
       console.log('Login exitoso:', {
         email: this.email(),
+        role: user.role,
         rememberMe: this.rememberMe(),
       });
 
@@ -79,7 +78,7 @@ export class Login {
         this.router.navigate(['/dashboard']);
       }, 1500);
     } else {
-      this.errorMessage.set('Credenciales invalidas. Intenta con admin@erp.com / Admin@2025!');
+      this.errorMessage.set('Credenciales invalidas. Usa las credenciales de prueba.');
       this.messageService.add({
         severity: 'error',
         summary: 'Error de autenticacion',

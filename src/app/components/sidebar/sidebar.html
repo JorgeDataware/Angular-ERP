@@ -1,7 +1,7 @@
 <aside class="sidebar" [class.collapsed]="collapsed()">
   <div class="sidebar-header">
     @if (!collapsed()) {
-      <span class="sidebar-logo">ERP System</span>
+      <a class="sidebar-logo" routerLink="/dashboard">ERP System</a>
     }
     <button
       class="toggle-btn"
@@ -13,14 +13,26 @@
     </button>
   </div>
 
+  @if (!collapsed() && currentUser()) {
+    <div class="user-info">
+      <div class="user-avatar">
+        <i class="pi pi-user"></i>
+      </div>
+      <div class="user-details">
+        <span class="user-name">{{ currentUser()!.fullName }}</span>
+        <span class="user-role">{{ getRoleLabel() }}</span>
+      </div>
+    </div>
+  }
+
   <nav class="sidebar-nav">
     <ul class="menu-list">
-      @for (item of menuItems; track item.label) {
+      @for (item of menuItems(); track item.label) {
         <li>
           <a
             class="menu-item"
-            href="#"
-            (click)="$event.preventDefault()"
+            [routerLink]="item.route"
+            routerLinkActive="active"
             pRipple
             [pTooltip]="collapsed() ? item.label : ''"
             tooltipPosition="right"
@@ -36,10 +48,13 @@
   </nav>
 
   <div class="sidebar-footer">
+    @if (!collapsed()) {
+      <span class="version-label">{{ appVersion }}</span>
+    }
     <a
       class="menu-item logout-item"
-      href="#"
-      (click)="$event.preventDefault()"
+      routerLink="/home/landing"
+      (click)="logout()"
       pRipple
       [pTooltip]="collapsed() ? 'Cerrar sesion' : ''"
       tooltipPosition="right"
