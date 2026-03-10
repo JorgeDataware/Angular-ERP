@@ -207,6 +207,10 @@ export class Tickets implements OnInit {
   canEdit = computed(() => this.authService.hasPermission('tickets', 'edit'));
   canDelete = computed(() => this.authService.hasPermission('tickets', 'delete'));
 
+  // Drag & Drop state
+  draggedTicket = signal<Ticket | null>(null);
+  dragOverColumn = signal<TicketStatus | null>(null);
+
   // Change history text for detail view
   changeHistoryText = computed(() => {
     const ticket = this.selectedTicket();
@@ -362,6 +366,79 @@ export class Tickets implements OnInit {
 
   goBack(): void {
     this.router.navigate(['/groups']);
+  }
+
+  // Drag & Drop methods
+  onDragStart(event: DragEvent, ticket: Ticket): void {
+    this.draggedTicket.set(ticket);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', String(ticket.id));
+    }
+  }
+
+  onDragEnd(): void {
+    this.draggedTicket.set(null);
+    this.dragOverColumn.set(null);
+  }
+
+  onDragOver(event: DragEvent, status: TicketStatus): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    const dragged = this.draggedTicket();
+    if (dragged && dragged.estado !== status) {
+      this.dragOverColumn.set(status);
+    }
+  }
+
+  onDragLeave(event: DragEvent, status: TicketStatus): void {
+    const relatedTarget = event.relatedTarget as HTMLElement;
+    const currentTarget = event.currentTarget as HTMLElement;
+    if (!currentTarget.contains(relatedTarget)) {
+      if (this.dragOverColumn() === status) {
+        this.dragOverColumn.set(null);
+      }
+    }
+  }
+
+  onDrop(event: DragEvent, newStatus: TicketStatus): void {
+    event.preventDefault();
+    this.dragOverColumn.set(null);
+
+    const ticket = this.draggedTicket();
+    if (!ticket || ticket.estado === newStatus) {
+      this.draggedTicket.set(null);
+      return;
+    }
+
+    if (!this.canEdit()) {
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Sin permiso',
+        detail: 'No tienes permiso para cambiar el estado de los tickets',
+        life: 3000,
+      });
+      this.draggedTicket.set(null);
+      return;
+    }
+
+    const currentUser = this.authService.currentUser()?.fullName || 'Sistema';
+    this.ticketService.updateTicket(
+      ticket.id,
+      { estado: newStatus },
+      currentUser
+    );
+
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Estado actualizado',
+      detail: `"${ticket.titulo}" movido a ${this.getStatusLabel(newStatus)}`,
+      life: 3000,
+    });
+
+    this.draggedTicket.set(null);
   }
 
   // Helpers

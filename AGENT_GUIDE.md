@@ -139,9 +139,9 @@ src/app/
     │   └── groups.routes.ts  # Route: '' → MainLayout → Groups
     │
     ├── tickets/              # Tickets CRUD page + Kanban view
-    │   ├── tickets.ts        # Component (full CRUD, kanban view toggle, detail dialog with comments + history textarea, filters, permission-based UI)
-    │   ├── tickets.html      # Toolbar + view toggle + filters panel + List view (DataTable) + Kanban view + Create/Edit dialog + Detail dialog (comments, history textarea)
-    │   ├── tickets.css       # Tickets CRUD styles + kanban board + filter panel + history textarea
+    │   ├── tickets.ts        # Component (full CRUD, kanban view toggle with drag & drop status change, detail dialog with comments + history textarea, filters, permission-based UI)
+    │   ├── tickets.html      # Toolbar + view toggle + filters panel + List view (DataTable) + Kanban view (draggable cards) + Create/Edit dialog + Detail dialog (comments, history textarea)
+    │   ├── tickets.css       # Tickets CRUD styles + kanban board + drag & drop feedback + filter panel + history textarea
     │   └── tickets.routes.ts # Route: '' → MainLayout → Tickets (guarded: authGuard + permissionGuard)
     │
     ├── group-users/          # Group Users CRUD page
@@ -617,6 +617,7 @@ interface Ticket {
 - **Filters panel:** Collapsible filter section with search, status, priority, and assigned user filters
 - **List view:** Full CRUD with `p-table` (DataTable), sorting, pagination, permission-gated buttons (`*appHasPermission`)
 - **Kanban view:** 4-column board (one per status: Pendiente, En Progreso, En Revisión, Finalizado) with cards showing titulo, asignadoA, prioridad tag, and fecha de creación. Uses `kanbanColumns` computed signal grouping filtered tickets by status.
+  - **Drag & drop:** Cards are draggable between columns to change ticket status. Uses native HTML5 Drag & Drop API (`draggable`, `dragstart`, `dragend`, `dragover`, `dragleave`, `drop`). Only enabled when the user has `tickets.edit` permission (`[attr.draggable]="canEdit()"`). On drop, calls `TicketService.updateTicket()` which automatically records the status change in `historialCambios`. Visual feedback: dragged card gets reduced opacity, target column highlights with primary color border/background, empty columns show "Soltar aquí" during drag. State managed via `draggedTicket` and `dragOverColumn` signals.
 - **Create/Edit dialog:** All ticket fields (titulo, descripcion, estado, asignadoA, prioridad, fechaLimite)
 - **Detail dialog:** PrimeNG Tabs showing: ticket info, comments (add new), and **change history textarea** (readonly `<textarea pTextarea>` with monospace font showing `historialCambios` formatted as text via `changeHistoryText` computed signal)
 - Status tags with color coding (pendiente=warn, en progreso=info, en revisión=secondary, finalizado=success)
@@ -744,7 +745,7 @@ Group Users (/groups/:groupId/users)  [MainLayout + GroupUsers]  [requires users
   └── Back button → Groups (/groups)
 
 Tickets (/tickets)  [MainLayout + Tickets]  [requires tickets.view]
-  ├── List view (DataTable) / Kanban view (4-column board) — toggle
+  ├── List view (DataTable) / Kanban view (4-column board with drag & drop) — toggle
   ├── Filters panel (search, status, priority, user)
   └── Sidebar → same
 
