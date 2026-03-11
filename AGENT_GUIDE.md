@@ -22,7 +22,7 @@
 | Tests | Vitest | 4.0.8 |
 | Package Manager | pnpm | 10.28.x |
 | UI Language | Spanish | — |
-| Auth Model | 4 roles (superAdmin, groupLeader, developer, usuario) | — |
+| Auth Model | Per-user permissions (no roles) | — |
 
 ---
 
@@ -78,12 +78,12 @@ src/app/
 ├── core/                     # Singleton services, guards, models
 │   ├── models/               # TypeScript interfaces/types
 │   │   ├── group.ts          # Group interface (id, nivel, autor, nombre, integrantes, tickets, descripcion)
-│   │   ├── user.ts           # User interface (id, username, fullName, email, phone, address, groupId, role: UserRole, active)
+│   │   ├── user.ts           # User interface (id, username, fullName, email, phone, address, groupId, active, permissions: RolePermissions)
 │   │   ├── ticket.ts         # Ticket, TicketComment, TicketChange, TicketStatus, TicketPriority
-│   │   └── permission.ts     # UserRole, AuthUser, RolePermissions, ModulePermissions, PermissionAction, PermissionModule
+│   │   └── permission.ts     # AuthUser, RolePermissions, ModulePermissions, PermissionAction, PermissionModule
 │   ├── services/             # Application services
-│   │   ├── auth.service.ts   # AuthService (login/logout, permission checking, 4 hardcoded users, 4 roles)
-│   │   ├── user.service.ts   # UserService (in-memory CRUD, 8 sample users across groups)
+│   │   ├── auth.service.ts   # AuthService (login/logout, permission checking, 4 hardcoded users with per-user permissions)
+│   │   ├── user.service.ts   # UserService (in-memory CRUD, 8 sample users across groups, getEmptyPermissions())
 │   │   ├── ticket.service.ts # TicketService (in-memory CRUD, comments, change history, 6 sample tickets)
 │   │   └── group.service.ts  # GroupService (in-memory CRUD, 5 sample groups)
 │   └── guards/               # Route guards
@@ -92,9 +92,9 @@ src/app/
 │
 ├── components/               # Reusable UI components
 │   └── sidebar/              # Sidebar navigation component
-│       ├── sidebar.ts        # Component (collapsible, dynamic menu based on permissions, user info, logout)
+│       ├── sidebar.ts        # Component (collapsible, dynamic menu based on permissions, user name display, logout)
 │       ├── sidebar.html      # Navigation menu with PrimeNG ripple & tooltips, user info section
-│       └── sidebar.css       # Dark-themed sidebar styles (260px / 64px collapsed, user-info styles)
+│       └── sidebar.css       # Dark-themed sidebar styles (260px / 64px collapsed)
 │
 ├── layouts/                  # Layout wrappers for authenticated pages
 │   └── main-layout/          # Main layout with sidebar + content area
@@ -157,9 +157,9 @@ src/app/
     │   └── ticket-dashboard.routes.ts # Route: '' → MainLayout → TicketDashboard (guarded: authGuard + permissionGuard)
     │
     └── admin-users/          # Users CRUD for superAdmin
-        ├── admin-users.ts         # Component (full CRUD for all users, role/group/active management)
-        ├── admin-users.html       # Toolbar + DataTable + Create/Edit dialog (username, fullName, email, phone, address, role, group, active)
-        ├── admin-users.css        # Admin users styles
+        ├── admin-users.ts         # Component (full CRUD for all users, role/group/active management, per-user permissions dialog)
+        ├── admin-users.html       # Toolbar + DataTable + Create/Edit dialog + Permissions dialog (module x action checkbox matrix)
+        ├── admin-users.css        # Admin users styles (includes permissions dialog styles)
         └── admin-users.routes.ts  # Route: '' → MainLayout → AdminUsers (guarded: authGuard + permissionGuard('users','add'))
 ```
 
@@ -313,6 +313,8 @@ export class <Name> {
 - **Global font:** Space Grotesk (loaded from Google Fonts via `<link>` in `index.html`, applied in `styles.css` on `body`)
 - PrimeIcons imported globally in `src/styles.css`
 - Use PrimeNG CSS variables for colors: `--p-primary-color`, `--p-primary-50`, `--p-surface-0` through `--p-surface-900`
+- **Text color contrast rule:** Page titles, labels, and text on light backgrounds (`--p-surface-0` or `--p-surface-50`) use `--p-surface-900`. For PrimeNG components that override text color internally (e.g., input fields, textarea), use `::ng-deep` with `color: var(--p-surface-900) !important`.
+- **Dark DataTable theme:** All `p-datatable` instances use a globally-applied dark theme (defined in `styles.css`). Headers: `--p-surface-800` bg + `--p-surface-100` text. Rows: `--p-surface-900` bg + `--p-surface-200` text. Striped even rows: `--p-surface-800`. Hover: `--p-surface-700`. Custom cell text classes inside datatables must use light colors (`--p-surface-0` for emphasis, `--p-surface-300`/`--p-surface-400` for muted). Never use dark colors (`--p-surface-900`) inside datatable cells.
 - Component styles are **scoped CSS** (not global)
 
 ### Adding New PrimeNG Components
@@ -363,33 +365,29 @@ export class <Name> {
 
 **Location:** `src/app/core/services/auth.service.ts`
 
-**Four hardcoded credential sets (4 roles):**
+**Four hardcoded credential sets (per-user permissions, no roles):**
 
-| Role | Email | Password | Permissions |
-|---|---|---|---|
-| superAdmin | `superadmin@erp.com` | `Super@2025!` | Full access: view/edit/delete/add on groups, users, tickets |
-| groupLeader | `lider@erp.com` | `Lider@2025!` | Groups (view/edit), Users (view/edit), Tickets (all) |
-| developer | `dev@erp.com` | `Devel@2025!` | Tickets (view), Groups (view) |
-| usuario | `usuario@erp.com` | `User@2025!` | Tickets (view/add) |
+| Email | Password | Permissions |
+|---|---|---|
+| `superadmin@erp.com` | `Super@2025!` | Full access: view/add/edit/delete on groups, users, tickets |
+| `lider@erp.com` | `Lider@2025!` | Groups (all), Users (view only), Tickets (all) |
+| `dev@erp.com` | `Devel@2025!` | Groups (view only), Tickets (view only) |
+| `usuario@erp.com` | `User@2025!` | Tickets (view/add only) |
 
 **AuthService API:**
-- `login(email, password): boolean` — authenticates and sets current user
-- `logout(): void` — clears session, redirects to login
+- `login(email, password): AuthUser | null` — authenticates and sets current user
+- `logout(): void` — clears session
 - `isLoggedIn(): boolean` — signal-based login state
 - `currentUser(): AuthUser | null` — current authenticated user signal
 - `hasPermission(module, action): boolean` — checks if current user has permission
-- `getRoleLabel(role): string` — returns Spanish display label for role
-- `isSuperAdmin / isGroupLeader / isDeveloper / isUsuario` — computed signals for role checks
+- `getCredentialsHint(): string` — returns formatted credentials hint string
 
 ### Permission Model
 
 **Modules:** `groups`, `users`, `tickets`
 **Actions:** `view`, `edit`, `delete`, `add`
 
-Admin permissions: all actions on all modules.
-groupLeader permissions: `groups.view/edit`, `users.view/edit`, `tickets.*` (all).
-developer permissions: `tickets.view`, `groups.view`.
-usuario permissions: `tickets.view/add`.
+Permissions are assigned per-user (no role-based defaults). Each user has their own `permissions: RolePermissions` object with boolean flags for each module/action combination.
 
 ### Guards
 
@@ -412,10 +410,10 @@ Structural directive that shows/hides elements based on user permissions.
 
 **Features:**
 - Credential validation via `AuthService`
-- Shows all four credential hints (superAdmin, groupLeader, developer, usuario)
+- Shows four credential hints (Usuario 1 through 4)
 - Error messages using `p-message` (inline)
 - Success/error notifications with `MessageService` toast
-- **Auto-redirect to `/dashboard` after 1.5 seconds on successful login**
+- **Auto-redirect to `/groups` after 1.5 seconds on successful login**
 
 ### Register Component
 
@@ -463,11 +461,11 @@ Structural directive that shows/hides elements based on user permissions.
 - Collapsible sidebar (260px expanded, 64px collapsed)
 - Toggle button with animated arrow icon
 - **Dynamic menu items** filtered by user permissions via `computed()`
-- User info section showing current user name and role
+- User info section showing current user name
 - Menu items with PrimeNG `pRipple` and `pTooltip` (tooltips shown only when collapsed)
 - Dark theme using `--p-surface-900` background
 - Active item indicator with left border in primary color via `routerLinkActive`
-- App version label (`v0.0.2`) displayed above logout button in footer
+- App version label (`v0.0.3`) displayed above logout button in footer
 - Logout via `AuthService.logout()` in footer section
 - Emits `collapsedChange` output event when toggled
 
@@ -650,6 +648,21 @@ interface User {
 
 ---
 
+## Admin Users Page (SuperAdmin CRUD + Permissions)
+
+**Location:** `src/app/pages/admin-users/`
+
+**Route:** `/admin/users` (guarded: `authGuard` + `permissionGuard('users','add')` — superAdmin only)
+
+**Features:**
+- Full CRUD for all users (not filtered by group)
+- DataTable with sorting, pagination, search
+- Create/Edit dialog: username, fullName, email, phone, address, group, active status
+- **Per-user permissions dialog:** Accessible via shield button (`pi-shield`) in each row's actions column. Opens a modal showing a matrix of modules (Grupos, Usuarios, Tickets) x actions (Ver, Agregar, Editar, Eliminar) with checkboxes. Each user has their own `permissions: RolePermissions` stored on the `User` model. On new user creation, permissions default to all-false via `UserService.getEmptyPermissions()`.
+- In-memory data via `UserService`
+
+---
+
 ## Ticket Dashboard Page
 
 **Location:** `src/app/pages/ticket-dashboard/`
@@ -685,7 +698,7 @@ src/app/
 │   ├── tickets/              # ✅ Implemented — Tickets CRUD (comments, history, permission-gated)
 │   ├── group-users/          # ✅ Implemented — Group Users CRUD (filtered by group)
 │   ├── ticket-dashboard/     # ✅ Implemented — Ticket Dashboard (filters, summary cards)
-│   ├── admin-users/          # ✅ Implemented — Users CRUD for superAdmin (role/group/active management)
+    │   ├── admin-users/          # ✅ Implemented — Users CRUD (group/active management, per-user permissions dialog)
 │   ├── profile/              # ✅ Implemented — User profile (RUD + assigned tickets datatable)
 │   ├── inventory/            # Inventory management
 │   ├── sales/                # Sales & orders
@@ -723,7 +736,7 @@ Landing (/home/landing)
 Login (/auth/login)
   ├── → Register (/auth/register)
   ├── → Landing (/home/landing)
-  └── → Dashboard (/dashboard)  [on successful login, after 1.5s]
+  └── → Groups (/groups)  [on successful login, after 1.5s]
 
 Register (/auth/register)
   ├── → Login (/auth/login)
@@ -753,8 +766,8 @@ Ticket Dashboard (/ticket-dashboard)  [MainLayout + TicketDashboard]  [requires 
 Ticket Dashboard (/ticket-dashboard/:groupId)  [filtered by group]
   └── Sidebar → same
 
-Admin Users (/admin/users)  [MainLayout + AdminUsers]  [requires users.add — superAdmin only]
-  └── Full CRUD for all users (role, group, active management)
+Admin Users (/admin/users)  [MainLayout + AdminUsers]  [requires users.add]
+  └── Full CRUD for all users (group, active management, per-user permissions dialog)
 
 * Sidebar items are dynamically shown/hidden based on user permissions
 ```
@@ -771,7 +784,7 @@ Admin Users (/admin/users)  [MainLayout + AdminUsers]  [requires users.add — s
 | Add/modify a layout | `layouts/<name>/` (main-layout pattern) |
 | Add a new guarded route | `app.routes.ts` (use `authGuard` + `permissionGuard`) |
 | Add a new permission-gated UI | Use `*appHasPermission="['module','action']"` directive |
-| Update permission definitions | `core/services/auth.service.ts` (ROLE_PERMISSIONS constant) |
+| Update permission definitions | `core/services/auth.service.ts` (inline permissions per user) |
 | Manage groups data | `core/services/group.service.ts` (GroupService, shared group state) |
 | Add a new model | `core/models/<entity>.ts` |
 | Add a new service | `core/services/<entity>.service.ts` (providedIn: 'root') |

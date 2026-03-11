@@ -1,4 +1,4 @@
-import { UserRole } from './permission';
+import { RolePermissions } from './permission';
 
 export interface User {
   id: number;
@@ -8,6 +8,6 @@ export interface User {
   phone: string;
   address: string;
   groupId: number;
-  role: UserRole;
   active: boolean;
+  permissions: RolePermissions;
 }

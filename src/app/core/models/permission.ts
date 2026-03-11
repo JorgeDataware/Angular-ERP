@@ -1,8 +1,6 @@
 export type PermissionAction = 'view' | 'add' | 'edit' | 'delete';
 export type PermissionModule = 'groups' | 'users' | 'tickets';
 
-export type UserRole = 'superAdmin' | 'groupLeader' | 'developer' | 'usuario';
-
 export interface ModulePermissions {
   view: boolean;
   add: boolean;
@@ -21,7 +19,6 @@ export interface AuthUser {
   email: string;
   password: string;
   fullName: string;
-  role: UserRole;
   permissions: RolePermissions;
   groupId?: number;
 }

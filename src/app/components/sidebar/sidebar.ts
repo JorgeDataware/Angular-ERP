@@ -44,12 +44,6 @@ export class Sidebar {
     });
   });
 
-  getRoleLabel(): string {
-    const user = this.currentUser();
-    if (!user) return '';
-    return this.authService.getRoleLabel(user.role);
-  }
-
   toggleSidebar(): void {
     this.collapsed.set(!this.collapsed());
     this.collapsedChange.emit(this.collapsed());

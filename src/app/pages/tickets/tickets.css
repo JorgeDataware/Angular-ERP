@@ -25,7 +25,7 @@
 /* Table */
 .ticket-title-cell {
   font-weight: 600;
-  color: var(--p-surface-900);
+  color: var(--p-surface-0);
 }
 
 .actions-cell {
@@ -40,7 +40,7 @@
 .empty-message {
   text-align: center;
   padding: 3rem 1rem !important;
-  color: var(--p-surface-500);
+  color: var(--p-surface-400);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -49,7 +49,7 @@
 
 .empty-icon {
   font-size: 2.5rem;
-  color: var(--p-surface-400);
+  color: var(--p-surface-500);
 }
 
 /* Dialog form */
@@ -116,7 +116,7 @@
 .detail-header-info h2 {
   margin: 0;
   font-size: 1.3rem;
-  color: var(--p-surface-900);
+  color: var(--p-text-color);
   flex: 1;
   margin-right: 1rem;
 }
@@ -156,11 +156,11 @@
 .detail-description h3 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--p-surface-800);
+  color: var(--p-text-color);
 }
 
 .detail-description p {
-  color: var(--p-surface-600);
+  color: var(--p-text-muted-color);
   line-height: 1.6;
   margin: 0;
 }
@@ -174,7 +174,7 @@
 .detail-section h3 {
   margin: 0 0 1rem;
   font-size: 1rem;
-  color: var(--p-surface-800);
+  color: var(--p-text-color);
 }
 
 .no-data {
@@ -196,6 +196,7 @@
   background: var(--p-surface-50);
   border-radius: 8px;
   border-left: 3px solid var(--p-primary-color);
+  color: var(--p-surface-900);
 }
 
 .comment-header {
@@ -203,6 +204,11 @@
   justify-content: space-between;
   margin-bottom: 0.25rem;
   font-size: 0.85rem;
+  color: var(--p-surface-900);
+}
+
+.comment-header strong {
+  color: var(--p-surface-900);
 }
 
 .comment-date {
@@ -210,7 +216,7 @@
 }
 
 .comment-text {
-  color: var(--p-surface-700);
+  color: var(--p-text-muted-color);
   font-size: 0.9rem;
   margin: 0;
 }
@@ -511,10 +517,10 @@
 }
 
 /* History textarea */
-.history-textarea {
+:host ::ng-deep .history-textarea.p-textarea {
   width: 100%;
   background: var(--p-surface-50) !important;
-  color: var(--p-surface-700);
+  color: var(--p-surface-900) !important;
   font-family: 'Courier New', monospace;
   font-size: 0.85rem;
   line-height: 1.5;

@@ -13,11 +13,12 @@ import { SelectModule } from 'primeng/select';
 import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { TooltipModule } from 'primeng/tooltip';
+import { CheckboxModule } from 'primeng/checkbox';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { UserService } from '../../core/services/user.service';
 import { AuthService } from '../../core/services/auth.service';
 import { User } from '../../core/models/user';
-import { UserRole } from '../../core/models/permission';
+import { PermissionModule, PermissionAction, RolePermissions } from '../../core/models/permission';
 import { GroupService } from '../../core/services/group.service';
 
 @Component({
@@ -37,6 +38,7 @@ import { GroupService } from '../../core/services/group.service';
     IconFieldModule,
     InputIconModule,
     TooltipModule,
+    CheckboxModule,
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './admin-users.html',
@@ -57,6 +59,30 @@ export class AdminUsers {
   isEditMode = signal(false);
   submitted = signal(false);
 
+  // Permissions dialog state
+  permissionsDialogVisible = signal(false);
+  permissionsUserId = signal<number | null>(null);
+  permissionsUserName = signal('');
+  editPermissions = signal<RolePermissions>({
+    groups: { view: false, add: false, edit: false, delete: false },
+    users: { view: false, add: false, edit: false, delete: false },
+    tickets: { view: false, add: false, edit: false, delete: false },
+  });
+
+  // Permission config for template iteration
+  permissionModules: { key: PermissionModule; label: string; icon: string }[] = [
+    { key: 'groups', label: 'Grupos', icon: 'pi pi-sitemap' },
+    { key: 'users', label: 'Usuarios', icon: 'pi pi-users' },
+    { key: 'tickets', label: 'Tickets', icon: 'pi pi-ticket' },
+  ];
+
+  permissionActions: { key: PermissionAction; label: string }[] = [
+    { key: 'view', label: 'Ver' },
+    { key: 'add', label: 'Agregar' },
+    { key: 'edit', label: 'Editar' },
+    { key: 'delete', label: 'Eliminar' },
+  ];
+
   // Form fields
   editId = signal<number | null>(null);
   editUsername = signal('');
@@ -65,17 +91,9 @@ export class AdminUsers {
   editPhone = signal('');
   editAddress = signal('');
   editGroupId = signal<number>(1);
-  editRole = signal<UserRole>('usuario');
   editActive = signal(true);
 
   // Options
-  roleOptions = [
-    { label: 'Super Admin', value: 'superAdmin' as UserRole },
-    { label: 'Lider de Grupo', value: 'groupLeader' as UserRole },
-    { label: 'Desarrollador', value: 'developer' as UserRole },
-    { label: 'Usuario', value: 'usuario' as UserRole },
-  ];
-
   activeOptions = [
     { label: 'Activo', value: true },
     { label: 'Inactivo', value: false },
@@ -98,8 +116,7 @@ export class AdminUsers {
       (u) =>
         u.fullName.toLowerCase().includes(term) ||
         u.username.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term) ||
-        u.role.toLowerCase().includes(term)
+        u.email.toLowerCase().includes(term)
     );
   });
 
@@ -135,7 +152,6 @@ export class AdminUsers {
     this.editPhone.set(user.phone);
     this.editAddress.set(user.address);
     this.editGroupId.set(user.groupId);
-    this.editRole.set(user.role);
     this.editActive.set(user.active);
     this.dialogVisible.set(true);
   }
@@ -172,7 +188,6 @@ export class AdminUsers {
         phone: this.editPhone().trim(),
         address: this.editAddress().trim(),
         groupId: this.editGroupId(),
-        role: this.editRole(),
         active: this.editActive(),
       });
       this.messageService.add({
@@ -189,8 +204,8 @@ export class AdminUsers {
         phone: this.editPhone().trim(),
         address: this.editAddress().trim(),
         groupId: this.editGroupId(),
-        role: this.editRole(),
         active: this.editActive(),
+        permissions: this.userService.getEmptyPermissions(),
       });
       this.messageService.add({
         severity: 'success',
@@ -209,17 +224,53 @@ export class AdminUsers {
     this.submitted.set(false);
   }
 
-  getRoleSeverity(role: UserRole): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
-    switch (role) {
-      case 'superAdmin': return 'danger';
-      case 'groupLeader': return 'warn';
-      case 'developer': return 'info';
-      case 'usuario': return 'secondary';
-    }
+  // Permissions dialog
+  openPermissions(user: User): void {
+    this.permissionsUserId.set(user.id);
+    this.permissionsUserName.set(user.fullName);
+    this.editPermissions.set({
+      groups: { ...user.permissions.groups },
+      users: { ...user.permissions.users },
+      tickets: { ...user.permissions.tickets },
+    });
+    this.permissionsDialogVisible.set(true);
   }
 
-  getRoleLabel(role: UserRole): string {
-    return this.authService.getRoleLabel(role);
+  getPermission(module: PermissionModule, action: PermissionAction): boolean {
+    return this.editPermissions()[module][action];
+  }
+
+  setPermission(module: PermissionModule, action: PermissionAction, value: boolean): void {
+    this.editPermissions.update((perms) => ({
+      ...perms,
+      [module]: {
+        ...perms[module],
+        [action]: value,
+      },
+    }));
+  }
+
+  savePermissions(): void {
+    const userId = this.permissionsUserId();
+    if (!userId) return;
+    this.userService.updateUser(userId, {
+      permissions: {
+        groups: { ...this.editPermissions().groups },
+        users: { ...this.editPermissions().users },
+        tickets: { ...this.editPermissions().tickets },
+      },
+    });
+    this.permissionsDialogVisible.set(false);
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Permisos actualizados',
+      detail: `Los permisos de "${this.permissionsUserName()}" han sido actualizados`,
+      life: 3000,
+    });
+  }
+
+  hidePermissionsDialog(): void {
+    this.permissionsDialogVisible.set(false);
   }
 
   private resetForm(): void {
@@ -230,7 +281,6 @@ export class AdminUsers {
     this.editPhone.set('');
     this.editAddress.set('');
     this.editGroupId.set(1);
-    this.editRole.set('usuario');
     this.editActive.set(true);
   }
 }

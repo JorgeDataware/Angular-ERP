@@ -100,12 +100,6 @@
   text-overflow: ellipsis;
 }
 
-.user-role {
-  font-size: 0.75rem;
-  color: var(--p-surface-400);
-  white-space: nowrap;
-}
-
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;

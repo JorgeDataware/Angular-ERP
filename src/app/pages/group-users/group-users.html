@@ -74,9 +74,6 @@
           Telefono <p-sortIcon field="phone" />
         </th>
         <th style="min-width: 10rem">Direccion</th>
-        <th pSortableColumn="role" style="min-width: 8rem">
-          Rol <p-sortIcon field="role" />
-        </th>
         <th style="min-width: 10rem; text-align: center">Acciones</th>
       </tr>
     </ng-template>
@@ -91,12 +88,6 @@
         <td>{{ user.phone }}</td>
         <td>
           <span class="address-cell">{{ user.address }}</span>
-        </td>
-        <td>
-          <p-tag
-            [value]="user.role === 'admin' ? 'Admin' : 'Usuario'"
-            [severity]="getRoleSeverity(user.role)"
-          />
         </td>
         <td class="actions-cell">
           <ng-container *appHasPermission="['users', 'edit']">
@@ -127,7 +118,7 @@
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="7" class="empty-message">
+        <td colspan="6" class="empty-message">
           <i class="pi pi-inbox empty-icon"></i>
           <span>No se encontraron usuarios en este grupo</span>
         </td>
@@ -234,21 +225,6 @@
         @if (submitted() && !editAddress().trim()) {
           <small class="field-error">La direccion es requerida.</small>
         }
-      </div>
-
-      <!-- Role -->
-      <div class="field">
-        <label for="role">Rol</label>
-        <p-select
-          id="role"
-          [options]="roleOptions"
-          [ngModel]="editRole()"
-          (ngModelChange)="editRole.set($event)"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Seleccionar rol"
-          styleClass="w-full"
-        />
       </div>
     </div>
   </div>

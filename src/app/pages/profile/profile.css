@@ -79,7 +79,7 @@
 .field label {
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--p-surface-700);
+  color: var(--p-surface-900);
 }
 
 .field-checkbox {
@@ -143,13 +143,23 @@
   width: 100%;
 }
 
+:host ::ng-deep input[pInputText] {
+  color: var(--p-surface-900) !important;
+}
+
 :host ::ng-deep input[readonly] {
   background-color: var(--p-surface-100);
+  color: var(--p-surface-900) !important;
   cursor: default;
+}
+
+:host ::ng-deep .p-password .p-password-input {
+  color: var(--p-surface-900) !important;
 }
 
 :host ::ng-deep .p-password.p-disabled .p-password-input {
   background-color: var(--p-surface-100);
+  color: var(--p-surface-900) !important;
   cursor: default;
 }
 
@@ -201,5 +211,5 @@
 
 .ticket-title-cell {
   font-weight: 600;
-  color: var(--p-surface-900);
+  color: var(--p-surface-0);
 }

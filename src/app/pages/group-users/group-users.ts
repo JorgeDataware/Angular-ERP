@@ -18,7 +18,6 @@ import { MessageService, ConfirmationService } from 'primeng/api';
 import { UserService } from '../../core/services/user.service';
 import { AuthService } from '../../core/services/auth.service';
 import { User } from '../../core/models/user';
-import { UserRole } from '../../core/models/permission';
 import { HasPermissionDirective } from '../../shared/directives/has-permission.directive';
 
 @Component({
@@ -71,15 +70,6 @@ export class GroupUsers implements OnInit {
   editEmail = signal('');
   editPhone = signal('');
   editAddress = signal('');
-  editRole = signal<UserRole>('developer');
-
-  // Options
-  roleOptions = [
-    { label: 'Super Admin', value: 'superAdmin' as UserRole },
-    { label: 'Lider de Grupo', value: 'groupLeader' as UserRole },
-    { label: 'Desarrollador', value: 'developer' as UserRole },
-    { label: 'Usuario', value: 'usuario' as UserRole },
-  ];
 
   // Search
   searchValue = signal('');
@@ -92,8 +82,7 @@ export class GroupUsers implements OnInit {
       (u) =>
         u.username.toLowerCase().includes(term) ||
         u.fullName.toLowerCase().includes(term) ||
-        u.email.toLowerCase().includes(term) ||
-        u.role.toLowerCase().includes(term)
+        u.email.toLowerCase().includes(term)
     );
   });
 
@@ -150,7 +139,6 @@ export class GroupUsers implements OnInit {
     this.editEmail.set(user.email);
     this.editPhone.set(user.phone);
     this.editAddress.set(user.address);
-    this.editRole.set(user.role);
     this.dialogVisible.set(true);
   }
 
@@ -185,7 +173,6 @@ export class GroupUsers implements OnInit {
         email: this.editEmail().trim(),
         phone: this.editPhone().trim(),
         address: this.editAddress().trim(),
-        role: this.editRole(),
       });
       this.messageService.add({
         severity: 'success',
@@ -201,8 +188,8 @@ export class GroupUsers implements OnInit {
         phone: this.editPhone().trim(),
         address: this.editAddress().trim(),
         groupId: this.groupId(),
-        role: this.editRole(),
         active: true,
+        permissions: this.userService.getEmptyPermissions(),
       });
       this.messageService.add({
         severity: 'success',
@@ -233,17 +220,6 @@ export class GroupUsers implements OnInit {
     this.editEmail.set('');
     this.editPhone.set('');
     this.editAddress.set('');
-    this.editRole.set('developer');
-  }
-
-  getRoleSeverity(role: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
-    switch (role) {
-      case 'superAdmin': return 'danger';
-      case 'groupLeader': return 'warn';
-      case 'developer': return 'info';
-      case 'usuario': return 'secondary';
-      default: return 'info';
-    }
   }
 
   filterPhone(event: Event): void {

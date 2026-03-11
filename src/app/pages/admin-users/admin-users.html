@@ -59,9 +59,6 @@
         <th pSortableColumn="phone" style="min-width: 8rem">
           Telefono <p-sortIcon field="phone" />
         </th>
-        <th pSortableColumn="role" style="min-width: 8rem">
-          Rol <p-sortIcon field="role" />
-        </th>
         <th pSortableColumn="groupId" style="min-width: 5rem">
           Grupo <p-sortIcon field="groupId" />
         </th>
@@ -79,12 +76,6 @@
         <td>{{ user.fullName }}</td>
         <td>{{ user.email }}</td>
         <td>{{ user.phone }}</td>
-        <td>
-          <p-tag
-            [value]="getRoleLabel(user.role)"
-            [severity]="getRoleSeverity(user.role)"
-          />
-        </td>
         <td>{{ user.groupId }}</td>
         <td>
           <p-tag
@@ -93,6 +84,15 @@
           />
         </td>
         <td class="actions-cell">
+          <p-button
+            icon="pi pi-shield"
+            [rounded]="true"
+            severity="info"
+            [text]="true"
+            pTooltip="Permisos"
+            tooltipPosition="top"
+            (onClick)="openPermissions(user)"
+          />
           <p-button
             icon="pi pi-pencil"
             [rounded]="true"
@@ -117,7 +117,7 @@
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="9" class="empty-message">
+        <td colspan="8" class="empty-message">
           <i class="pi pi-users empty-icon"></i>
           <span>No se encontraron usuarios</span>
         </td>
@@ -219,21 +219,6 @@
         }
       </div>
 
-      <!-- Role -->
-      <div class="field">
-        <label for="role">Rol</label>
-        <p-select
-          id="role"
-          [options]="roleOptions"
-          [ngModel]="editRole()"
-          (ngModelChange)="editRole.set($event)"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Seleccionar rol"
-          styleClass="w-full"
-        />
-      </div>
-
       <!-- Group -->
       <div class="field">
         <label for="groupId">Grupo</label>
@@ -278,6 +263,67 @@
       label="Guardar"
       icon="pi pi-check"
       (onClick)="saveUser()"
+    />
+  </ng-template>
+</p-dialog>
+
+<!-- Permissions Dialog -->
+<p-dialog
+  header="Permisos del Usuario"
+  [(visible)]="permissionsDialogVisible"
+  [modal]="true"
+  [style]="{ width: '40rem' }"
+  [draggable]="false"
+  [resizable]="false"
+  (onHide)="hidePermissionsDialog()"
+  styleClass="permissions-dialog"
+>
+  <div class="permissions-content">
+    <div class="permissions-user-info">
+      <i class="pi pi-user"></i>
+      <span>{{ permissionsUserName() }}</span>
+    </div>
+
+    <div class="permissions-table">
+      <div class="permissions-header-row">
+        <div class="permissions-module-header">Modulo</div>
+        @for (action of permissionActions; track action.key) {
+          <div class="permissions-action-header">{{ action.label }}</div>
+        }
+      </div>
+
+      @for (module of permissionModules; track module.key) {
+        <div class="permissions-row">
+          <div class="permissions-module-cell">
+            <i [class]="module.icon"></i>
+            <span>{{ module.label }}</span>
+          </div>
+          @for (action of permissionActions; track action.key) {
+            <div class="permissions-action-cell">
+              <p-checkbox
+                [ngModel]="getPermission(module.key, action.key)"
+                (ngModelChange)="setPermission(module.key, action.key, $event)"
+                [binary]="true"
+              />
+            </div>
+          }
+        </div>
+      }
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      icon="pi pi-times"
+      severity="secondary"
+      [text]="true"
+      (onClick)="hidePermissionsDialog()"
+    />
+    <p-button
+      label="Guardar"
+      icon="pi pi-check"
+      (onClick)="savePermissions()"
     />
   </ng-template>
 </p-dialog>

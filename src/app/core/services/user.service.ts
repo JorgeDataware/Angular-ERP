@@ -1,22 +1,31 @@
 import { Injectable, signal } from '@angular/core';
 import { User } from '../models/user';
+import { RolePermissions } from '../models/permission';
 
 @Injectable({ providedIn: 'root' })
 export class UserService {
   users = signal<User[]>([
-    { id: 1, username: 'cmendoza', fullName: 'Carlos Mendoza', email: 'carlos@erp.com', phone: '5551234567', address: 'Calle 1 #100', groupId: 1, role: 'groupLeader', active: true },
-    { id: 2, username: 'agarcia', fullName: 'Ana Garcia', email: 'ana@erp.com', phone: '5552345678', address: 'Calle 2 #200', groupId: 2, role: 'developer', active: true },
-    { id: 3, username: 'lperez', fullName: 'Luis Perez', email: 'luis@erp.com', phone: '5553456789', address: 'Calle 3 #300', groupId: 3, role: 'developer', active: true },
-    { id: 4, username: 'mlopez', fullName: 'Maria Lopez', email: 'maria@erp.com', phone: '5554567890', address: 'Calle 4 #400', groupId: 4, role: 'groupLeader', active: true },
-    { id: 5, username: 'rdiaz', fullName: 'Roberto Diaz', email: 'roberto@erp.com', phone: '5555678901', address: 'Calle 5 #500', groupId: 5, role: 'developer', active: true },
-    { id: 6, username: 'jmartinez', fullName: 'Juan Martinez', email: 'juan@erp.com', phone: '5556789012', address: 'Calle 6 #600', groupId: 1, role: 'developer', active: true },
-    { id: 7, username: 'srodriguez', fullName: 'Sofia Rodriguez', email: 'sofia@erp.com', phone: '5557890123', address: 'Calle 7 #700', groupId: 2, role: 'usuario', active: true },
-    { id: 8, username: 'phernandez', fullName: 'Pedro Hernandez', email: 'pedro@erp.com', phone: '5558901234', address: 'Calle 8 #800', groupId: 1, role: 'developer', active: true },
+    { id: 1, username: 'cmendoza', fullName: 'Carlos Mendoza', email: 'carlos@erp.com', phone: '5551234567', address: 'Calle 1 #100', groupId: 1, active: true, permissions: { groups: { view: true, add: true, edit: true, delete: true }, users: { view: true, add: false, edit: false, delete: false }, tickets: { view: true, add: true, edit: true, delete: true } } },
+    { id: 2, username: 'agarcia', fullName: 'Ana Garcia', email: 'ana@erp.com', phone: '5552345678', address: 'Calle 2 #200', groupId: 2, active: true, permissions: { groups: { view: true, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: false, edit: false, delete: false } } },
+    { id: 3, username: 'lperez', fullName: 'Luis Perez', email: 'luis@erp.com', phone: '5553456789', address: 'Calle 3 #300', groupId: 3, active: true, permissions: { groups: { view: true, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: false, edit: false, delete: false } } },
+    { id: 4, username: 'mlopez', fullName: 'Maria Lopez', email: 'maria@erp.com', phone: '5554567890', address: 'Calle 4 #400', groupId: 4, active: true, permissions: { groups: { view: true, add: true, edit: true, delete: true }, users: { view: true, add: false, edit: false, delete: false }, tickets: { view: true, add: true, edit: true, delete: true } } },
+    { id: 5, username: 'rdiaz', fullName: 'Roberto Diaz', email: 'roberto@erp.com', phone: '5555678901', address: 'Calle 5 #500', groupId: 5, active: true, permissions: { groups: { view: true, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: false, edit: false, delete: false } } },
+    { id: 6, username: 'jmartinez', fullName: 'Juan Martinez', email: 'juan@erp.com', phone: '5556789012', address: 'Calle 6 #600', groupId: 1, active: true, permissions: { groups: { view: true, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: false, edit: false, delete: false } } },
+    { id: 7, username: 'srodriguez', fullName: 'Sofia Rodriguez', email: 'sofia@erp.com', phone: '5557890123', address: 'Calle 7 #700', groupId: 2, active: true, permissions: { groups: { view: false, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: true, edit: false, delete: false } } },
+    { id: 8, username: 'phernandez', fullName: 'Pedro Hernandez', email: 'pedro@erp.com', phone: '5558901234', address: 'Calle 8 #800', groupId: 1, active: true, permissions: { groups: { view: true, add: false, edit: false, delete: false }, users: { view: false, add: false, edit: false, delete: false }, tickets: { view: true, add: false, edit: false, delete: false } } },
   ]);
 
   private nextId(): number {
     const ids = this.users().map((u) => u.id);
     return ids.length > 0 ? Math.max(...ids) + 1 : 1;
+  }
+
+  getEmptyPermissions(): RolePermissions {
+    return {
+      groups: { view: false, add: false, edit: false, delete: false },
+      users: { view: false, add: false, edit: false, delete: false },
+      tickets: { view: false, add: false, edit: false, delete: false },
+    };
   }
 
   getUsersByGroup(groupId: number): User[] {

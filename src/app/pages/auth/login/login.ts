@@ -59,23 +59,21 @@ export class Login {
     const user = this.authService.login(this.email(), this.password());
 
     if (user) {
-      const roleLabel = this.authService.getRoleLabel(user.role);
       this.messageService.add({
         severity: 'success',
         summary: 'Exito',
-        detail: `Inicio de sesion exitoso como ${roleLabel}`,
+        detail: 'Inicio de sesion exitoso',
         life: 3000
       });
 
       console.log('Login exitoso:', {
         email: this.email(),
-        role: user.role,
         rememberMe: this.rememberMe(),
       });
 
-      // Redirigir al dashboard despues de login exitoso
+      // Redirigir al dashboard de grupos despues de login exitoso
       setTimeout(() => {
-        this.router.navigate(['/dashboard']);
+        this.router.navigate(['/groups']);
       }, 1500);
     } else {
       this.errorMessage.set('Credenciales invalidas. Usa las credenciales de prueba.');
