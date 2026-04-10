@@ -6,6 +6,9 @@ export const authGuard: CanActivateFn = () => {
   const authService = inject(AuthService);
   const router = inject(Router);
 
+  // Restaurar sesión desde localStorage si existe
+  authService.restoreSession();
+
   if (authService.isLoggedIn()) {
     return true;
   }

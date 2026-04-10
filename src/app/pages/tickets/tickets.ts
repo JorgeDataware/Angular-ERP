@@ -2,6 +2,7 @@ import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
+import { firstValueFrom } from 'rxjs';
 import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { DialogModule } from 'primeng/dialog';
@@ -20,10 +21,17 @@ import { TabsModule } from 'primeng/tabs';
 import { ToggleButtonModule } from 'primeng/togglebutton';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { TicketService } from '../../core/services/ticket.service';
-import { UserService } from '../../core/services/user.service';
+import { GroupService } from '../../core/services/group.service';
 import { AuthService } from '../../core/services/auth.service';
-import { Ticket, TicketStatus, TicketPriority } from '../../core/models/ticket';
-import { HasPermissionDirective } from '../../shared/directives/has-permission.directive';
+import {
+  TicketBackend, TicketStatusBackend, TicketPriorityBackend, TicketPriorityPayload,
+  CreateTicketPayload, UpdateTicketPayload, TagSeverity,
+  TICKET_STATUS_LABELS, TICKET_STATUS_SEVERITY,
+  TICKET_PRIORITY_LABELS, TICKET_PRIORITY_SEVERITY,
+  TICKET_PRIORITY_FORM_OPTIONS, TICKET_STATUS_OPTIONS, TICKET_PRIORITY_OPTIONS,
+  TICKET_PRIORITY_TO_PAYLOAD,
+} from '../../core/models/ticket';
+import { GroupMember } from '../../core/models/group';
 
 @Component({
   selector: 'app-tickets',
@@ -46,7 +54,6 @@ import { HasPermissionDirective } from '../../shared/directives/has-permission.d
     TooltipModule,
     TabsModule,
     ToggleButtonModule,
-    HasPermissionDirective,
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './tickets.html',
@@ -54,64 +61,72 @@ import { HasPermissionDirective } from '../../shared/directives/has-permission.d
 })
 export class Tickets implements OnInit {
   private ticketService = inject(TicketService);
-  private userService = inject(UserService);
+  private groupService = inject(GroupService);
   private authService = inject(AuthService);
   private messageService = inject(MessageService);
   private confirmationService = inject(ConfirmationService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
 
-  // Group context
-  groupId = signal<number | null>(null);
+  // Group context (UUID from route param)
+  groupId = signal<string | null>(null);
   groupName = signal('');
 
   // View mode
   kanbanView = signal(false);
 
-  // Kanban columns
-  kanbanStatuses: TicketStatus[] = ['pendiente', 'en progreso', 'en revision', 'finalizado'];
+  // Loading
+  loading = computed(() => this.ticketService.loading());
+
+  // Kanban: 3 columns — Open / InProgress / Closed (status 3 exists in enum but is unused)
+  kanbanStatuses: TicketStatusBackend[] = [1, 2, 4];
 
   kanbanColumns = computed(() => {
     const tickets = this.filteredTickets();
     return this.kanbanStatuses.map((status) => ({
       status,
-      label: this.getStatusLabel(status),
-      tickets: tickets.filter((t) => t.estado === status),
+      label: TICKET_STATUS_LABELS[status],
+      cssClass: this.getKanbanHeaderClass(status),
+      tickets: tickets.filter((t) => t.status === status),
     }));
   });
 
   // Filters
-  filterEstado = signal<TicketStatus | null>(null);
-  filterPrioridad = signal<TicketPriority | null>(null);
-  filterAsignadoA = signal<string | null>(null);
+  filterStatus = signal<TicketStatusBackend | null>(null);
+  filterPriority = signal<TicketPriorityBackend | null>(null);
+  filterAssigned = signal<string | null>(null);
 
-  estadoFilterOptions = [
-    { label: 'Todos', value: null },
-    { label: 'Pendiente', value: 'pendiente' as TicketStatus },
-    { label: 'En progreso', value: 'en progreso' as TicketStatus },
-    { label: 'En revision', value: 'en revision' as TicketStatus },
-    { label: 'Finalizado', value: 'finalizado' as TicketStatus },
+  statusFilterOptions = [
+    { label: 'Todos', value: null as TicketStatusBackend | null },
+    ...TICKET_STATUS_OPTIONS.map(o => ({ label: o.label, value: o.value as TicketStatusBackend | null })),
   ];
 
-  prioridadFilterOptions = [
-    { label: 'Todas', value: null },
-    { label: 'Alta', value: 'alta' as TicketPriority },
-    { label: 'Media', value: 'media' as TicketPriority },
-    { label: 'Baja', value: 'baja' as TicketPriority },
+  priorityFilterOptions = [
+    { label: 'Todas', value: null as TicketPriorityBackend | null },
+    ...TICKET_PRIORITY_OPTIONS.map(o => ({ label: o.label, value: o.value as TicketPriorityBackend | null })),
   ];
 
-  userFilterOptions = computed(() => {
-    const names = this.userService.getAllUserNames();
-    return [{ label: 'Todos', value: null as string | null }, ...names.map((n) => ({ label: n, value: n as string | null }))];
+  /** Unique assigned user names from loaded tickets */
+  assignedFilterOptions = computed(() => {
+    const names = new Set<string>();
+    for (const t of this.ticketService.tickets()) {
+      if (t.assignedUserName) names.add(t.assignedUserName);
+    }
+    const sorted = Array.from(names).sort();
+    return [
+      { label: 'Todos', value: null as string | null },
+      ...sorted.map(n => ({ label: n, value: n as string | null })),
+    ];
   });
 
-  // Data
+  // Data — all tickets or filtered by group
   tickets = computed(() => {
     const gid = this.groupId();
-    if (gid !== null) {
-      return this.ticketService.getTicketsByGroup(gid);
+    const all = this.ticketService.tickets();
+    if (gid) {
+      return all.filter(t => t.groupId === gid);
     }
-    return this.ticketService.tickets();
+    return all;
   });
 
   // Dialog state
@@ -119,35 +134,30 @@ export class Tickets implements OnInit {
   isEditMode = signal(false);
   submitted = signal(false);
   detailDialogVisible = signal(false);
-  selectedTicket = signal<Ticket | null>(null);
+  selectedTicket = signal<TicketBackend | null>(null);
 
-  // Form fields
-  editId = signal<number | null>(null);
-  editTitulo = signal('');
-  editDescripcion = signal('');
-  editEstado = signal<TicketStatus>('pendiente');
-  editAsignadoA = signal('');
-  editPrioridad = signal<TicketPriority>('media');
-  editFechaCreacion = signal<Date>(new Date());
-  editFechaLimite = signal<Date | null>(null);
-  editComentarioNuevo = signal('');
+  // Assign dialog
+  assignDialogVisible = signal(false);
+  assignTicketId = signal<string | null>(null);
+  assignGroupId = signal<string | null>(null);
+  assignMembers = signal<GroupMember[]>([]);
+  assignSelectedUserId = signal<string | null>(null);
+  assignLoading = signal(false);
 
-  // Options for selects
-  estadoOptions = [
-    { label: 'Pendiente', value: 'pendiente' as TicketStatus },
-    { label: 'En progreso', value: 'en progreso' as TicketStatus },
-    { label: 'En revision', value: 'en revision' as TicketStatus },
-    { label: 'Finalizado', value: 'finalizado' as TicketStatus },
-  ];
+  // Form fields for create/edit
+  editId = signal<string | null>(null);
+  editTitle = signal('');
+  editDescription = signal('');
+  editComments = signal('');
+  editPriority = signal<TicketPriorityPayload>('Medium');
+  editGroupId = signal<string | null>(null);
+  editDueDate = signal<Date | null>(null);
 
-  prioridadOptions = [
-    { label: 'Alta', value: 'alta' as TicketPriority },
-    { label: 'Media', value: 'media' as TicketPriority },
-    { label: 'Baja', value: 'baja' as TicketPriority },
-  ];
+  // Options for form selects
+  priorityFormOptions = TICKET_PRIORITY_FORM_OPTIONS;
 
-  userOptions = computed(() =>
-    this.userService.getAllUserNames().map((name) => ({ label: name, value: name }))
+  groupOptions = computed(() =>
+    this.groupService.groups().map(g => ({ label: g.name, value: g.id }))
   );
 
   // Search
@@ -157,43 +167,45 @@ export class Tickets implements OnInit {
     const term = this.searchValue().toLowerCase().trim();
     let list = this.tickets();
 
-    // Apply filters
-    const estado = this.filterEstado();
-    if (estado) {
-      list = list.filter((t) => t.estado === estado);
+    const status = this.filterStatus();
+    if (status !== null) {
+      list = list.filter(t => t.status === status);
     }
 
-    const prioridad = this.filterPrioridad();
-    if (prioridad) {
-      list = list.filter((t) => t.prioridad === prioridad);
+    const priority = this.filterPriority();
+    if (priority !== null) {
+      list = list.filter(t => t.priority === priority);
     }
 
-    const asignado = this.filterAsignadoA();
-    if (asignado) {
-      list = list.filter((t) => t.asignadoA === asignado);
+    const assigned = this.filterAssigned();
+    if (assigned) {
+      list = list.filter(t => t.assignedUserName === assigned);
     }
 
     if (term) {
-      list = list.filter(
-        (t) =>
-          t.titulo.toLowerCase().includes(term) ||
-          t.descripcion.toLowerCase().includes(term) ||
-          t.asignadoA.toLowerCase().includes(term) ||
-          t.estado.toLowerCase().includes(term) ||
-          t.prioridad.toLowerCase().includes(term)
+      list = list.filter(t =>
+        t.title.toLowerCase().includes(term) ||
+        t.description.toLowerCase().includes(term) ||
+        (t.assignedUserName?.toLowerCase().includes(term) ?? false) ||
+        t.createdByUserName.toLowerCase().includes(term) ||
+        t.groupName.toLowerCase().includes(term)
       );
     }
 
     return list;
   });
 
-  // Validation
+  // Validation: create needs title, description, priority, groupId. Edit needs at least title.
   isFormValid = computed(() => {
+    if (this.isEditMode()) {
+      // Edit: at least something provided, title not empty
+      return this.editTitle().trim().length > 0;
+    }
+    // Create
     return (
-      this.editTitulo().trim().length > 0 &&
-      this.editDescripcion().trim().length > 0 &&
-      this.editAsignadoA().trim().length > 0 &&
-      this.editFechaLimite() !== null
+      this.editTitle().trim().length > 0 &&
+      this.editDescription().trim().length > 0 &&
+      this.editGroupId() !== null
     );
   });
 
@@ -203,27 +215,19 @@ export class Tickets implements OnInit {
   );
 
   // Permissions
-  canAdd = computed(() => this.authService.hasPermission('tickets', 'add'));
+  canCreate = computed(() => this.authService.hasPermission('tickets', 'add'));
   canEdit = computed(() => this.authService.hasPermission('tickets', 'edit'));
-  canDelete = computed(() => this.authService.hasPermission('tickets', 'delete'));
+  canAssign = computed(() => this.authService.hasRawPermission('canAssign_Tickets'));
+  canUpdateStatus = computed(() => this.authService.hasRawPermission('canUpdateStatus_Tickets'));
 
   // Drag & Drop state
-  draggedTicket = signal<Ticket | null>(null);
-  dragOverColumn = signal<TicketStatus | null>(null);
-
-  // Change history text for detail view
-  changeHistoryText = computed(() => {
-    const ticket = this.selectedTicket();
-    if (!ticket || ticket.historialCambios.length === 0) return '';
-    return ticket.historialCambios
-      .map((c) => `[${c.fecha}] ${c.usuario} cambio ${c.campo}: "${c.valorAnterior}" -> "${c.valorNuevo}"`)
-      .join('\n');
-  });
+  draggedTicket = signal<TicketBackend | null>(null);
+  dragOverColumn = signal<TicketStatusBackend | null>(null);
 
   ngOnInit(): void {
     this.route.params.subscribe((params) => {
       if (params['groupId']) {
-        this.groupId.set(+params['groupId']);
+        this.groupId.set(params['groupId']);
       }
     });
     this.route.queryParams.subscribe((qp) => {
@@ -231,131 +235,246 @@ export class Tickets implements OnInit {
         this.groupName.set(qp['groupName']);
       }
     });
+    // Load data
+    this.ticketService.loadTickets();
+    this.groupService.loadGroups();
   }
+
+  // ----------------------------------------------------------
+  // CREATE / EDIT dialog
+  // ----------------------------------------------------------
 
   openNew(): void {
     this.resetForm();
+    // Pre-select group if in group context
+    if (this.groupId()) {
+      this.editGroupId.set(this.groupId());
+    }
     this.isEditMode.set(false);
     this.submitted.set(false);
     this.dialogVisible.set(true);
   }
 
-  editTicket(ticket: Ticket): void {
+  editTicket(ticket: TicketBackend): void {
+    // Can only edit Open (status=1) tickets
+    if (ticket.status !== 1) {
+      this.messageService.add({
+        severity: 'warn',
+        summary: 'No editable',
+        detail: 'Solo se pueden editar tickets abiertos',
+        life: 3000,
+      });
+      return;
+    }
     this.isEditMode.set(true);
     this.submitted.set(false);
     this.editId.set(ticket.id);
-    this.editTitulo.set(ticket.titulo);
-    this.editDescripcion.set(ticket.descripcion);
-    this.editEstado.set(ticket.estado);
-    this.editAsignadoA.set(ticket.asignadoA);
-    this.editPrioridad.set(ticket.prioridad);
-    this.editFechaCreacion.set(new Date(ticket.fechaCreacion));
-    this.editFechaLimite.set(new Date(ticket.fechaLimite));
+    this.editTitle.set(ticket.title);
+    this.editDescription.set(ticket.description);
+    this.editComments.set(ticket.comments ?? '');
+    this.editPriority.set(TICKET_PRIORITY_TO_PAYLOAD[ticket.priority]);
+    this.editGroupId.set(ticket.groupId);
+    this.editDueDate.set(ticket.dueDate ? new Date(ticket.dueDate) : null);
     this.dialogVisible.set(true);
   }
 
-  viewTicketDetail(ticket: Ticket): void {
+  async saveTicket(): Promise<void> {
+    this.submitted.set(true);
+    if (!this.isFormValid()) return;
+
+    try {
+      if (this.isEditMode()) {
+        const payload: UpdateTicketPayload = {};
+        if (this.editTitle().trim()) payload.title = this.editTitle().trim();
+        if (this.editDescription().trim()) payload.description = this.editDescription().trim();
+        if (this.editComments().trim()) payload.comments = this.editComments().trim();
+        payload.priority = this.editPriority();
+        if (this.editDueDate()) {
+          payload.dueDate = this.formatDate(this.editDueDate()!);
+        }
+        await this.ticketService.updateTicket(this.editId()!, payload);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Actualizado',
+          detail: `El ticket "${this.editTitle().trim()}" ha sido actualizado`,
+          life: 3000,
+        });
+      } else {
+        const payload: CreateTicketPayload = {
+          title: this.editTitle().trim(),
+          description: this.editDescription().trim(),
+          priority: this.editPriority(),
+          groupId: this.editGroupId()!,
+        };
+        if (this.editComments().trim()) payload.comments = this.editComments().trim();
+        if (this.editDueDate()) payload.dueDate = this.formatDate(this.editDueDate()!);
+
+        await this.ticketService.createTicket(payload);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Creado',
+          detail: `El ticket "${this.editTitle().trim()}" ha sido creado`,
+          life: 3000,
+        });
+      }
+      this.dialogVisible.set(false);
+      this.resetForm();
+    } catch (err: any) {
+      const msg = err?.error?.message ?? 'Error al guardar el ticket';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: msg,
+        life: 5000,
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // DETAIL dialog
+  // ----------------------------------------------------------
+
+  viewTicketDetail(ticket: TicketBackend): void {
     this.selectedTicket.set(ticket);
     this.detailDialogVisible.set(true);
   }
 
-  confirmDelete(ticket: Ticket): void {
+  // ----------------------------------------------------------
+  // ASSIGN workflow
+  // ----------------------------------------------------------
+
+  async openAssignDialog(ticket: TicketBackend): Promise<void> {
+    this.assignTicketId.set(ticket.id);
+    this.assignGroupId.set(ticket.groupId);
+    this.assignSelectedUserId.set(null);
+    this.assignLoading.set(true);
+    this.assignDialogVisible.set(true);
+
+    try {
+      const members = await firstValueFrom(
+        this.groupService.getGroupMembers(ticket.groupId)
+      );
+      this.assignMembers.set(members);
+    } catch {
+      this.assignMembers.set([]);
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: 'No se pudieron cargar los miembros del grupo',
+        life: 3000,
+      });
+    } finally {
+      this.assignLoading.set(false);
+    }
+  }
+
+  assignMemberOptions = computed(() =>
+    this.assignMembers().map(m => ({ label: m.completeName || m.userName, value: m.id }))
+  );
+
+  async confirmAssign(): Promise<void> {
+    const ticketId = this.assignTicketId();
+    const userId = this.assignSelectedUserId();
+    if (!ticketId || !userId) return;
+
+    try {
+      await this.ticketService.assignTicket(ticketId, { assignedUserId: userId });
+      this.messageService.add({
+        severity: 'success',
+        summary: 'Asignado',
+        detail: 'El ticket ha sido asignado correctamente',
+        life: 3000,
+      });
+      this.assignDialogVisible.set(false);
+      // Refresh detail if open
+      this.refreshSelectedTicket(ticketId);
+    } catch (err: any) {
+      const msg = err?.error?.message ?? 'Error al asignar el ticket';
+      this.messageService.add({
+        severity: 'error',
+        summary: 'Error',
+        detail: msg,
+        life: 5000,
+      });
+    }
+  }
+
+  // ----------------------------------------------------------
+  // START WORK workflow
+  // ----------------------------------------------------------
+
+  async startWork(ticket: TicketBackend): Promise<void> {
     this.confirmationService.confirm({
-      message: `¿Estas seguro de que deseas eliminar el ticket "${ticket.titulo}"?`,
-      header: 'Confirmar Eliminacion',
-      icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Eliminar',
+      message: `¿Deseas iniciar el trabajo en "${ticket.title}"?`,
+      header: 'Iniciar trabajo',
+      icon: 'pi pi-play',
+      acceptLabel: 'Iniciar',
       rejectLabel: 'Cancelar',
-      acceptButtonStyleClass: 'p-button-danger',
-      accept: () => {
-        this.ticketService.deleteTicket(ticket.id);
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Eliminado',
-          detail: `El ticket "${ticket.titulo}" ha sido eliminado`,
-          life: 3000,
-        });
+      accept: async () => {
+        try {
+          await this.ticketService.startWork(ticket.id);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Iniciado',
+            detail: `El trabajo en "${ticket.title}" ha comenzado`,
+            life: 3000,
+          });
+          this.refreshSelectedTicket(ticket.id);
+        } catch (err: any) {
+          const msg = err?.error?.message ?? 'Error al iniciar el trabajo';
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: msg,
+            life: 5000,
+          });
+        }
       },
     });
   }
 
-  saveTicket(): void {
-    this.submitted.set(true);
-    if (!this.isFormValid()) return;
+  // ----------------------------------------------------------
+  // FINISH workflow
+  // ----------------------------------------------------------
 
-    const fechaCreacion = this.formatDate(this.editFechaCreacion());
-    const fechaLimite = this.formatDate(this.editFechaLimite()!);
-    const currentUser = this.authService.currentUser()?.fullName || 'Sistema';
-
-    if (this.isEditMode()) {
-      this.ticketService.updateTicket(
-        this.editId()!,
-        {
-          titulo: this.editTitulo().trim(),
-          descripcion: this.editDescripcion().trim(),
-          estado: this.editEstado(),
-          asignadoA: this.editAsignadoA(),
-          prioridad: this.editPrioridad(),
-          fechaCreacion,
-          fechaLimite,
-        },
-        currentUser
-      );
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Actualizado',
-        detail: `El ticket "${this.editTitulo().trim()}" ha sido actualizado`,
-        life: 3000,
-      });
-    } else {
-      const groupId = this.groupId() ?? 1;
-      this.ticketService.addTicket({
-        titulo: this.editTitulo().trim(),
-        descripcion: this.editDescripcion().trim(),
-        estado: this.editEstado(),
-        asignadoA: this.editAsignadoA(),
-        prioridad: this.editPrioridad(),
-        fechaCreacion,
-        fechaLimite,
-        groupId,
-      });
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Creado',
-        detail: `El ticket "${this.editTitulo().trim()}" ha sido creado`,
-        life: 3000,
-      });
-    }
-
-    this.dialogVisible.set(false);
-    this.resetForm();
-  }
-
-  addComment(): void {
-    const ticket = this.selectedTicket();
-    const text = this.editComentarioNuevo().trim();
-    if (!ticket || !text) return;
-
-    const currentUser = this.authService.currentUser()?.fullName || 'Sistema';
-    this.ticketService.addComment(ticket.id, currentUser, text);
-    this.editComentarioNuevo.set('');
-
-    // Refresh selected ticket
-    const updated = this.ticketService.tickets().find((t) => t.id === ticket.id);
-    if (updated) this.selectedTicket.set({ ...updated });
-
-    this.messageService.add({
-      severity: 'success',
-      summary: 'Comentario agregado',
-      detail: 'El comentario ha sido agregado al ticket',
-      life: 3000,
+  async finishTicket(ticket: TicketBackend): Promise<void> {
+    this.confirmationService.confirm({
+      message: `¿Deseas finalizar el ticket "${ticket.title}"?`,
+      header: 'Finalizar ticket',
+      icon: 'pi pi-check-circle',
+      acceptLabel: 'Finalizar',
+      rejectLabel: 'Cancelar',
+      accept: async () => {
+        try {
+          await this.ticketService.finishTicket(ticket.id);
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Finalizado',
+            detail: `El ticket "${ticket.title}" ha sido finalizado`,
+            life: 3000,
+          });
+          this.refreshSelectedTicket(ticket.id);
+        } catch (err: any) {
+          const msg = err?.error?.message ?? 'Error al finalizar el ticket';
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: msg,
+            life: 5000,
+          });
+        }
+      },
     });
   }
 
+  // ----------------------------------------------------------
+  // FILTERS
+  // ----------------------------------------------------------
+
   clearFilters(): void {
-    this.filterEstado.set(null);
-    this.filterPrioridad.set(null);
-    this.filterAsignadoA.set(null);
+    this.filterStatus.set(null);
+    this.filterPriority.set(null);
+    this.filterAssigned.set(null);
     this.searchValue.set('');
   }
 
@@ -368,12 +487,15 @@ export class Tickets implements OnInit {
     this.router.navigate(['/groups']);
   }
 
-  // Drag & Drop methods
-  onDragStart(event: DragEvent, ticket: Ticket): void {
+  // ----------------------------------------------------------
+  // DRAG & DROP — Kanban workflow transitions
+  // ----------------------------------------------------------
+
+  onDragStart(event: DragEvent, ticket: TicketBackend): void {
     this.draggedTicket.set(ticket);
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', String(ticket.id));
+      event.dataTransfer.setData('text/plain', ticket.id);
     }
   }
 
@@ -382,18 +504,18 @@ export class Tickets implements OnInit {
     this.dragOverColumn.set(null);
   }
 
-  onDragOver(event: DragEvent, status: TicketStatus): void {
+  onDragOver(event: DragEvent, status: TicketStatusBackend): void {
     event.preventDefault();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'move';
     }
     const dragged = this.draggedTicket();
-    if (dragged && dragged.estado !== status) {
+    if (dragged && dragged.status !== status) {
       this.dragOverColumn.set(status);
     }
   }
 
-  onDragLeave(event: DragEvent, status: TicketStatus): void {
+  onDragLeave(event: DragEvent, status: TicketStatusBackend): void {
     const relatedTarget = event.relatedTarget as HTMLElement;
     const currentTarget = event.currentTarget as HTMLElement;
     if (!currentTarget.contains(relatedTarget)) {
@@ -403,89 +525,161 @@ export class Tickets implements OnInit {
     }
   }
 
-  onDrop(event: DragEvent, newStatus: TicketStatus): void {
+  async onDrop(event: DragEvent, newStatus: TicketStatusBackend): Promise<void> {
     event.preventDefault();
     this.dragOverColumn.set(null);
 
     const ticket = this.draggedTicket();
-    if (!ticket || ticket.estado === newStatus) {
+    if (!ticket || ticket.status === newStatus) {
       this.draggedTicket.set(null);
       return;
     }
 
-    if (!this.canEdit()) {
+    // Validate allowed transitions:
+    // Open(1) → InProgress(2): start-work (canUpdateStatus)
+    // InProgress(2) → Closed(4): finish (canUpdateStatus)
+    // Status 3 (OnRevision) exists in enum but is not used in workflow
+    // Other transitions not allowed via backend
+    try {
+      if (ticket.status === 1 && newStatus === 2) {
+        // start-work
+        if (!this.canUpdateStatus()) {
+          this.showNoPermission();
+          this.draggedTicket.set(null);
+          return;
+        }
+        await this.ticketService.startWork(ticket.id);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Iniciado',
+          detail: `"${ticket.title}" movido a En progreso`,
+          life: 3000,
+        });
+      } else if (ticket.status === 2 && newStatus === 4) {
+        // finish
+        if (!this.canUpdateStatus()) {
+          this.showNoPermission();
+          this.draggedTicket.set(null);
+          return;
+        }
+        await this.ticketService.finishTicket(ticket.id);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Finalizado',
+          detail: `"${ticket.title}" movido a Cerrado`,
+          life: 3000,
+        });
+      } else {
+        this.messageService.add({
+          severity: 'warn',
+          summary: 'Transicion no permitida',
+          detail: 'Solo se permite: Abierto → En progreso → Cerrado',
+          life: 3000,
+        });
+      }
+    } catch (err: any) {
+      const msg = err?.error?.message ?? 'Error al cambiar el estado';
       this.messageService.add({
         severity: 'error',
-        summary: 'Sin permiso',
-        detail: 'No tienes permiso para cambiar el estado de los tickets',
-        life: 3000,
+        summary: 'Error',
+        detail: msg,
+        life: 5000,
       });
-      this.draggedTicket.set(null);
-      return;
     }
-
-    const currentUser = this.authService.currentUser()?.fullName || 'Sistema';
-    this.ticketService.updateTicket(
-      ticket.id,
-      { estado: newStatus },
-      currentUser
-    );
-
-    this.messageService.add({
-      severity: 'success',
-      summary: 'Estado actualizado',
-      detail: `"${ticket.titulo}" movido a ${this.getStatusLabel(newStatus)}`,
-      life: 3000,
-    });
 
     this.draggedTicket.set(null);
   }
 
-  // Helpers
+  // ----------------------------------------------------------
+  // HELPERS
+  // ----------------------------------------------------------
+
   private resetForm(): void {
     this.editId.set(null);
-    this.editTitulo.set('');
-    this.editDescripcion.set('');
-    this.editEstado.set('pendiente');
-    this.editAsignadoA.set('');
-    this.editPrioridad.set('media');
-    this.editFechaCreacion.set(new Date());
-    this.editFechaLimite.set(null);
-    this.editComentarioNuevo.set('');
+    this.editTitle.set('');
+    this.editDescription.set('');
+    this.editComments.set('');
+    this.editPriority.set('Medium');
+    this.editGroupId.set(null);
+    this.editDueDate.set(null);
   }
 
   private formatDate(date: Date): string {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, '0');
-    const d = String(date.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return date.toISOString();
   }
 
-  getStatusLabel(status: TicketStatus): string {
+  private showNoPermission(): void {
+    this.messageService.add({
+      severity: 'error',
+      summary: 'Sin permiso',
+      detail: 'No tienes permiso para realizar esta accion',
+      life: 3000,
+    });
+  }
+
+  /** After a workflow action, refresh selectedTicket if detail dialog is open */
+  private refreshSelectedTicket(ticketId: string): void {
+    const sel = this.selectedTicket();
+    if (sel && sel.id === ticketId) {
+      const updated = this.ticketService.tickets().find(t => t.id === ticketId);
+      if (updated) this.selectedTicket.set({ ...updated });
+    }
+  }
+
+  // Template helpers
+  getStatusLabel(status: TicketStatusBackend): string {
+    return TICKET_STATUS_LABELS[status] ?? 'Desconocido';
+  }
+
+  getStatusSeverity(status: TicketStatusBackend): TagSeverity {
+    return TICKET_STATUS_SEVERITY[status] ?? 'info';
+  }
+
+  getPriorityLabel(priority: TicketPriorityBackend): string {
+    return TICKET_PRIORITY_LABELS[priority] ?? 'Desconocida';
+  }
+
+  getPrioritySeverity(priority: TicketPriorityBackend): TagSeverity {
+    return TICKET_PRIORITY_SEVERITY[priority] ?? 'info';
+  }
+
+  getKanbanHeaderClass(status: TicketStatusBackend): string {
     switch (status) {
-      case 'pendiente': return 'Pendiente';
-      case 'en progreso': return 'En progreso';
-      case 'en revision': return 'En revision';
-      case 'finalizado': return 'Finalizado';
+      case 1: return 'kanban-header-open';
+      case 2: return 'kanban-header-in-progress';
+      case 4: return 'kanban-header-closed';
+      default: return '';
     }
   }
 
-  getEstadoSeverity(estado: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
-    switch (estado) {
-      case 'pendiente': return 'warn';
-      case 'en progreso': return 'info';
-      case 'en revision': return 'secondary';
-      case 'finalizado': return 'success';
-      default: return 'info';
-    }
+  /** Whether a ticket can be dragged in kanban (only Open or InProgress, with permission) */
+  canDragTicket(ticket: TicketBackend): boolean {
+    return this.canUpdateStatus() && (ticket.status === 1 || ticket.status === 2);
   }
 
-  getPrioridadSeverity(prioridad: string): 'success' | 'warn' | 'danger' | 'info' {
-    switch (prioridad) {
-      case 'alta': return 'danger';
-      case 'media': return 'warn';
-      case 'baja': return 'success';
-      default: return 'info';
-    }
+  /** Whether a ticket is Open and unassigned (can be assigned) */
+  isAssignable(ticket: TicketBackend): boolean {
+    return ticket.status === 1 && !ticket.assignedUserId;
+  }
+
+  /** Whether start-work can be called on this ticket */
+  canStartWork(ticket: TicketBackend): boolean {
+    return ticket.status === 1 && !!ticket.assignedUserId;
+  }
+
+  /** Whether finish can be called on this ticket */
+  canFinish(ticket: TicketBackend): boolean {
+    return ticket.status === 2;
+  }
+
+  /** Whether the ticket is Open (editable) */
+  isOpen(ticket: TicketBackend): boolean {
+    return ticket.status === 1;
+  }
+
+  formatDateDisplay(dateStr: string | null): string {
+    if (!dateStr) return '-';
+    // Return just the date part
+    return dateStr.substring(0, 10);
   }
 }

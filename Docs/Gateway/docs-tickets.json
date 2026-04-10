@@ -1,0 +1,1319 @@
+{
+  "module": "tickets",
+  "endpoints": [
+    {
+      "id": "tickets-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets",
+      "internalEndpoint": "/tickets",
+      "httpMethod": "GET",
+      "summary": "Get tickets",
+      "description": "Retrieves the list of all tickets, including assigned and unassigned tickets.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Tickets retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": "00000000-0000-0000-0000-000000000003",
+                "assignedUserName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets",
+        "Returns all tickets (assigned and unassigned)",
+        "Includes creator and assigned user info",
+        "status: 1=Open, 2=InProgress, 3=Closed (inferred)",
+        "priority: 1=Low, 2=Medium, 3=High (from schema enum)",
+        "comments and dueDate are optional (can be null)",
+        "assignedUserId and assignedUserName are null for unassigned tickets"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets"
+      },
+      "frontendNotes": [
+        "Use for main tickets dashboard/table",
+        "Display in table or kanban board",
+        "Group by status or priority",
+        "Filter by assignee, creator, group, status",
+        "Show visual indicators for priority (High=3, Medium=2, Low=1)",
+        "Highlight overdue tickets (dueDate < now)",
+        "assignedUserName null means unassigned"
+      ],
+      "inferenceNotes": [
+        "OpCode STKRD200 = Success Ticket Service Read 200",
+        "Comprehensive ticket data including relationships",
+        "Priority values: Low, Medium, High map to 1, 2, 3"
+      ]
+    },
+    {
+      "id": "tickets-get-pending",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/pending",
+      "internalEndpoint": "/tickets/pending",
+      "httpMethod": "GET",
+      "summary": "Get pending tickets",
+      "description": "Retrieves open and unassigned tickets. Regular users only see pending tickets of groups they own. Superadmin can see all pending tickets.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission. Filtered by ownership in microservice.",
+      "ownershipRules": [
+        "Regular users see pending tickets only from groups they own",
+        "Superadmin sees all pending tickets",
+        "Determined by microservice based on user role"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Pending tickets retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Pending tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": null,
+                "assignedUserName": null
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/pending",
+        "Returns only open (status=1) and unassigned tickets",
+        "Regular users: filtered to groups they own",
+        "Superadmin: sees all pending tickets",
+        "assignedUserId and assignedUserName are always null",
+        "Useful for ticket assignment workflow"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/pending"
+      },
+      "frontendNotes": [
+        "Use for pending tickets queue/board",
+        "Show only to group owners and admins",
+        "Primary view for ticket assignment",
+        "Highlight urgent pending tickets (high priority or near dueDate)",
+        "assignedUserId is always null in this list",
+        "Filter by group if user owns multiple groups",
+        "Show assign button for each ticket"
+      ],
+      "inferenceNotes": [
+        "Filtered by user role and group ownership in microservice",
+        "status must be 1 (Open)",
+        "assignedUserId must be null",
+        "Critical for assignment workflow"
+      ]
+    },
+    {
+      "id": "tickets-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "GET",
+      "summary": "Get ticket by id",
+      "description": "Retrieves the detail of a single ticket by its id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["ticketId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Ticket retrieved successfully.",
+          "whenItHappens": "When ticket exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Ticket retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": "00000000-0000-0000-0000-000000000003",
+                "assignedUserName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}",
+        "Returns complete ticket details",
+        "Includes creator and assigned user info",
+        "Includes timestamps for tracking"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}"
+      },
+      "frontendNotes": [
+        "Use for ticket detail modal/page",
+        "Show all ticket information",
+        "Display createdByUserName and assignedUserName",
+        "Show status badge and priority indicator",
+        "Enable edit button if user is creator or admin",
+        "Enable status change buttons if user is assignee",
+        "Handle 404 with user-friendly message"
+      ],
+      "inferenceNotes": [
+        "OpCode ETKNF404 = Error Ticket Service Not Found 404",
+        "Same response structure as get-all",
+        "Returns single ticket in array"
+      ]
+    },
+    {
+      "id": "tickets-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets",
+      "internalEndpoint": "/tickets",
+      "httpMethod": "POST",
+      "summary": "Create ticket",
+      "description": "Creates a new ticket.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Tickets"],
+      "permissionNotes": "Requires canCreate_Tickets permission.",
+      "ownershipRules": [
+        "Authenticated user becomes the ticket creator",
+        "createdByUserId set from JWT userId claim"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["title", "description", "priority", "groupId"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Ticket title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the issue"
+          },
+          "comments": {
+            "type": "string",
+            "nullable": true,
+            "description": "Additional comments (optional)"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["Low", "Medium", "High"],
+            "description": "Ticket priority level"
+          },
+          "dueDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Due date (ISO 8601 format, optional)"
+          },
+          "groupId": {
+            "type": "string",
+            "description": "Target group ID (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "title": "Sistema lento",
+        "description": "El sistema está muy lento desde esta mañana",
+        "comments": "Reportado por 3 usuarios",
+        "priority": "High",
+        "dueDate": "2026-04-15T18:00:00.000Z",
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+      },
+      "fieldsRequired": ["title", "description", "priority", "groupId"],
+      "fieldsOptional": ["comments", "dueDate"],
+      "validationRules": [
+        "priority must be one of: Low, Medium, High",
+        "groupId must be valid UUID and exist",
+        "group must be active",
+        "dueDate must be valid ISO 8601 date string if provided"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "STKCR201",
+          "message": "Ticket created successfully.",
+          "whenItHappens": "When ticket is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "STKCR201",
+            "message": "Ticket created successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The specified group is inactive.",
+          "whenItHappens": "When group exists but is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The specified group is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets",
+        "Ticket created with status=Open (1)",
+        "Ticket is unassigned initially (assignedUserId=null)",
+        "Group must exist and be active",
+        "createdByUserId set from JWT token",
+        "Returns new ticket ID",
+        "priority string converted to numeric in microservice"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets"
+      },
+      "frontendNotes": [
+        "Use for create ticket form",
+        "Provide group selection dropdown",
+        "Priority dropdown with Low/Medium/High options",
+        "Make comments and dueDate optional",
+        "Use returned ID to redirect to ticket detail or refresh list",
+        "Handle 409 if group is inactive",
+        "Show success message with ticket title",
+        "Refresh tickets list after creation"
+      ],
+      "inferenceNotes": [
+        "OpCode STKCR201 = Success Ticket Service Create 201",
+        "OpCode ETKCF409 = Error Ticket Service Conflict 409",
+        "Priority enum: Low, Medium, High (frontend sends string)",
+        "Ticket starts as Open and Unassigned"
+      ]
+    },
+    {
+      "id": "tickets-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "PATCH",
+      "summary": "Edit ticket",
+      "description": "Updates editable fields of an open ticket. Only the creator or superadmin can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Tickets"],
+      "permissionNotes": "Requires canUpdate_Tickets permission at gateway. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only ticket creator can edit",
+        "Superadmin can edit any ticket",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID to update (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Ticket title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Ticket description"
+          },
+          "comments": {
+            "type": "string",
+            "nullable": true,
+            "description": "Additional comments"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["Low", "Medium", "High"],
+            "description": "Ticket priority"
+          },
+          "dueDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Due date (ISO 8601)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "title": "Sistema muy lento - Actualizado",
+        "description": "El sistema está muy lento desde esta mañana. Afecta a todos los módulos.",
+        "comments": "Reportado por 5 usuarios ahora",
+        "priority": "High",
+        "dueDate": "2026-04-10T18:00:00.000Z"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": [
+        "title",
+        "description",
+        "comments",
+        "priority",
+        "dueDate"
+      ],
+      "validationRules": [
+        "ticket must be Open (status=1)",
+        "priority must be Low, Medium, or High if provided",
+        "at least one field should be provided (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKUP200",
+          "message": "Ticket updated successfully.",
+          "whenItHappens": "When ticket is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKUP200",
+            "message": "Ticket updated successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to edit this ticket.",
+          "whenItHappens": "When non-creator/non-admin tries to edit",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to edit this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot be edited because it is not open.",
+          "whenItHappens": "When ticket status is not Open (InProgress or Closed)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be edited because it is not open.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}",
+        "Only creator or superadmin can edit",
+        "Ticket must be Open (status=1)",
+        "Cannot edit InProgress or Closed tickets",
+        "Does not change status, assignee, or group",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}"
+      },
+      "frontendNotes": [
+        "Show edit button only for creator or admin",
+        "Disable edit if status is not Open",
+        "Pre-populate form with current values",
+        "Handle 409 with message about ticket status",
+        "All fields optional (send only changed)",
+        "Refresh ticket detail after update",
+        "Cannot change group or assignee (use specific endpoints)"
+      ],
+      "inferenceNotes": [
+        "OpCode STKUP200 = Success Ticket Service Update 200",
+        "OpCode ETKFB403 = Error Ticket Service Forbidden 403",
+        "PATCH method indicates partial update",
+        "Status restriction: only Open tickets editable"
+      ]
+    },
+    {
+      "id": "tickets-assign",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/assign",
+      "internalEndpoint": "/tickets/:ticketId/assign",
+      "httpMethod": "POST",
+      "summary": "Assign ticket",
+      "description": "Assigns an open ticket to an active user that belongs to the ticket group. Only the group owner or superadmin can assign.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canAssign_Tickets"],
+      "permissionNotes": "Requires canAssign_Tickets permission at gateway. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can assign tickets",
+        "Superadmin can assign any ticket",
+        "Validated by microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID to assign (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["assignedUserId"],
+        "properties": {
+          "assignedUserId": {
+            "type": "string",
+            "description": "User ID to assign ticket to (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "assignedUserId": "00000000-0000-0000-0000-000000000003"
+      },
+      "fieldsRequired": ["assignedUserId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "assignedUserId must be valid UUID",
+        "ticket must be Open (status=1)",
+        "ticket must be unassigned",
+        "user must be active member of ticket's group"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKAS200",
+          "message": "Ticket assigned successfully.",
+          "whenItHappens": "When ticket is assigned successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKAS200",
+            "message": "Ticket assigned successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to assign this ticket.",
+          "whenItHappens": "When non-owner/non-admin tries to assign",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to assign this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket is already assigned.",
+          "whenItHappens": "When ticket already has an assignedUserId",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket is already assigned.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/assign",
+        "Only group owner or superadmin can assign",
+        "Ticket must be Open and Unassigned",
+        "User must be active group member",
+        "Sets assignedUserId field",
+        "Ticket remains in Open status",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/assign"
+      },
+      "frontendNotes": [
+        "Show assign button only for group owner/admin",
+        "Disable if ticket already assigned",
+        "Populate dropdown with group members from /groups/:groupId/members",
+        "Handle 409 if already assigned",
+        "Refresh ticket detail and pending list after assignment",
+        "Show assignee name after successful assignment",
+        "Primary action for pending tickets view"
+      ],
+      "inferenceNotes": [
+        "OpCode STKAS200 = Success Ticket Service Assign 200",
+        "User must be group member (validated in microservice)",
+        "Ticket stays Open after assignment",
+        "Next step: assigned user starts work"
+      ]
+    },
+    {
+      "id": "tickets-start-work",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/start-work",
+      "internalEndpoint": "/tickets/:ticketId/start-work",
+      "httpMethod": "POST",
+      "summary": "Start work on ticket",
+      "description": "Changes the status of the assigned ticket from Open to InProgress. Only the assigned user can do this.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requires canUpdateStatus_Tickets permission at gateway. Assignee validation in microservice.",
+      "ownershipRules": [
+        "Only assigned user can start work",
+        "Validated by microservice based on assignedUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "ticket must be Open (status=1)",
+        "ticket must be assigned",
+        "current user must be the assignee"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKSW200",
+          "message": "Work started successfully.",
+          "whenItHappens": "When status changes from Open to InProgress",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKSW200",
+            "message": "Work started successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to start work on this ticket.",
+          "whenItHappens": "When user is not the assignee",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to start work on this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot start work because it is not open.",
+          "whenItHappens": "When ticket is not in Open status",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot start work because it is not open.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/start-work",
+        "Changes status from Open (1) to InProgress (2)",
+        "Only assigned user can start work",
+        "Ticket must be Open and Assigned",
+        "Updates updatedAt timestamp",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/start-work"
+      },
+      "frontendNotes": [
+        "Show 'Start Work' button only to assignee",
+        "Disable if status is not Open",
+        "Update ticket status badge to InProgress after success",
+        "Refresh ticket detail and my tickets list",
+        "Handle 409 if ticket not in Open status",
+        "Typical workflow: assign → start work → finish"
+      ],
+      "inferenceNotes": [
+        "OpCode STKSW200 = Success Ticket Service Start Work 200",
+        "Status transition: Open (1) → InProgress (2)",
+        "Only assignee authorized",
+        "Part of standard ticket workflow"
+      ]
+    },
+    {
+      "id": "tickets-finish",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/finish",
+      "internalEndpoint": "/tickets/:ticketId/finish",
+      "httpMethod": "POST",
+      "summary": "Finish ticket",
+      "description": "Changes the status of the assigned ticket from InProgress to Closed. Only the assigned user can do this.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requires canUpdateStatus_Tickets permission at gateway. Assignee validation in microservice.",
+      "ownershipRules": [
+        "Only assigned user can finish ticket",
+        "Validated by microservice based on assignedUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "ticket must be InProgress (status=2)",
+        "ticket must be assigned",
+        "current user must be the assignee"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKFN200",
+          "message": "Ticket finished successfully.",
+          "whenItHappens": "When status changes from InProgress to Closed",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKFN200",
+            "message": "Ticket finished successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to finish this ticket.",
+          "whenItHappens": "When user is not the assignee",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to finish this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot be finished because it is not in progress.",
+          "whenItHappens": "When ticket is not in InProgress status",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be finished because it is not in progress.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/finish",
+        "Changes status from InProgress (2) to Closed (3)",
+        "Only assigned user can finish",
+        "Ticket must be InProgress",
+        "Updates updatedAt timestamp",
+        "Closed tickets cannot be edited",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/finish"
+      },
+      "frontendNotes": [
+        "Show 'Finish' button only to assignee",
+        "Disable if status is not InProgress",
+        "Update ticket status badge to Closed after success",
+        "Refresh ticket detail and my tickets list",
+        "Handle 409 if ticket not in InProgress status",
+        "Consider showing completion confirmation",
+        "Move to closed tickets section after finish",
+        "Final step in ticket workflow"
+      ],
+      "inferenceNotes": [
+        "OpCode STKFN200 = Success Ticket Service Finish 200",
+        "Status transition: InProgress (2) → Closed (3)",
+        "Only assignee authorized",
+        "Completes ticket lifecycle"
+      ]
+    }
+  ]
+}

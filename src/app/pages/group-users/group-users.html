@@ -14,9 +14,9 @@
     />
     <h1 class="group-users-title">
       @if (groupName()) {
-        Usuarios - {{ groupName() }}
+        Miembros - {{ groupName() }}
       } @else {
-        Usuarios del Grupo
+        Miembros del Grupo
       }
     </h1>
   </div>
@@ -24,12 +24,12 @@
   <!-- Toolbar -->
   <p-toolbar styleClass="group-users-toolbar">
     <ng-template #start>
-      <ng-container *appHasPermission="['users', 'add']">
+      <ng-container *appHasPermission="['groups', 'edit']">
         <p-button
-          label="Nuevo Usuario"
-          icon="pi pi-plus"
+          label="Agregar Miembro"
+          icon="pi pi-user-plus"
           severity="primary"
-          (onClick)="openNew()"
+          (onClick)="openAddMember()"
         />
       </ng-container>
     </ng-template>
@@ -40,76 +40,54 @@
           pInputText
           [ngModel]="searchValue()"
           (ngModelChange)="searchValue.set($event)"
-          placeholder="Buscar usuarios..."
+          placeholder="Buscar miembros..."
         />
       </p-iconfield>
     </ng-template>
   </p-toolbar>
 
-  <!-- DataTable -->
+  <!-- DataTable — Members -->
   <p-table
-    [value]="filteredUsers()"
+    [value]="filteredMembers()"
     [paginator]="true"
     [rows]="10"
     [rowsPerPageOptions]="[5, 10, 25]"
-    [tableStyle]="{ 'min-width': '60rem' }"
+    [tableStyle]="{ 'min-width': '40rem' }"
     [rowHover]="true"
     [showCurrentPageReport]="true"
-    currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} usuarios"
+    currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} miembros"
+    [loading]="loading()"
     dataKey="id"
     styleClass="p-datatable-striped"
   >
     <ng-template #header>
       <tr>
-        <th pSortableColumn="username" style="min-width: 8rem">
-          Username <p-sortIcon field="username" />
+        <th pSortableColumn="userName" style="min-width: 10rem">
+          Usuario <p-sortIcon field="userName" />
         </th>
-        <th pSortableColumn="fullName" style="min-width: 12rem">
-          Nombre completo <p-sortIcon field="fullName" />
+        <th pSortableColumn="completeName" style="min-width: 14rem">
+          Nombre completo <p-sortIcon field="completeName" />
         </th>
-        <th pSortableColumn="email" style="min-width: 12rem">
-          Email <p-sortIcon field="email" />
-        </th>
-        <th pSortableColumn="phone" style="min-width: 8rem">
-          Telefono <p-sortIcon field="phone" />
-        </th>
-        <th style="min-width: 10rem">Direccion</th>
-        <th style="min-width: 10rem; text-align: center">Acciones</th>
+        <th style="min-width: 8rem; text-align: center">Acciones</th>
       </tr>
     </ng-template>
 
-    <ng-template #body let-user>
+    <ng-template #body let-member>
       <tr>
         <td>
-          <span class="username-cell">{{ user.username }}</span>
+          <span class="username-cell">{{ member.userName }}</span>
         </td>
-        <td>{{ user.fullName }}</td>
-        <td>{{ user.email }}</td>
-        <td>{{ user.phone }}</td>
-        <td>
-          <span class="address-cell">{{ user.address }}</span>
-        </td>
+        <td>{{ member.completeName }}</td>
         <td class="actions-cell">
-          <ng-container *appHasPermission="['users', 'edit']">
+          <ng-container *appHasPermission="['groups', 'edit']">
             <p-button
-              icon="pi pi-pencil"
-              [rounded]="true"
-              severity="info"
-              [text]="true"
-              pTooltip="Editar"
-              tooltipPosition="top"
-              (onClick)="editUser(user)"
-            />
-          </ng-container>
-          <ng-container *appHasPermission="['users', 'delete']">
-            <p-button
-              icon="pi pi-trash"
+              icon="pi pi-user-minus"
               [rounded]="true"
               severity="danger"
               [text]="true"
-              pTooltip="Eliminar"
+              pTooltip="Remover del grupo"
               tooltipPosition="top"
-              (onClick)="confirmDelete(user)"
+              (onClick)="confirmRemoveMember(member)"
             />
           </ng-container>
         </td>
@@ -118,114 +96,43 @@
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="6" class="empty-message">
-          <i class="pi pi-inbox empty-icon"></i>
-          <span>No se encontraron usuarios en este grupo</span>
+        <td colspan="3" class="empty-message">
+          <i class="pi pi-users empty-icon"></i>
+          <span>No hay miembros en este grupo</span>
         </td>
       </tr>
     </ng-template>
   </p-table>
 </div>
 
-<!-- Create / Edit Dialog -->
+<!-- Add Member Dialog -->
 <p-dialog
-  [header]="dialogTitle()"
-  [(visible)]="dialogVisible"
+  header="Agregar Miembro"
+  [(visible)]="addMemberDialogVisible"
   [modal]="true"
-  [style]="{ width: '45rem' }"
+  [style]="{ width: '35rem', 'min-height': '20rem' }"
   [draggable]="false"
   [resizable]="false"
-  (onHide)="hideDialog()"
+  (onHide)="hideAddMemberDialog()"
   styleClass="group-users-dialog"
 >
   <div class="dialog-content">
-    <div class="form-grid">
-      <!-- Username -->
-      <div class="field">
-        <label for="username">Username <span class="required">*</span></label>
-        <input
-          pInputText
-          id="username"
-          [ngModel]="editUsername()"
-          (ngModelChange)="editUsername.set($event)"
-          placeholder="Nombre de usuario"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && (!editUsername().trim() || editUsername().includes(' ')) }"
-        />
-        @if (submitted() && !editUsername().trim()) {
-          <small class="field-error">El username es requerido.</small>
-        }
-        @if (submitted() && editUsername().includes(' ')) {
-          <small class="field-error">El username no puede contener espacios.</small>
-        }
-      </div>
-
-      <!-- Full Name -->
-      <div class="field">
-        <label for="fullName">Nombre completo <span class="required">*</span></label>
-        <input
-          pInputText
-          id="fullName"
-          [ngModel]="editFullName()"
-          (ngModelChange)="editFullName.set($event)"
-          placeholder="Nombre completo"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editFullName().trim() }"
-        />
-        @if (submitted() && !editFullName().trim()) {
-          <small class="field-error">El nombre es requerido.</small>
-        }
-      </div>
-
-      <!-- Email -->
-      <div class="field">
-        <label for="email">Email <span class="required">*</span></label>
-        <input
-          pInputText
-          id="email"
-          [ngModel]="editEmail()"
-          (ngModelChange)="editEmail.set($event)"
-          placeholder="correo@ejemplo.com"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && (!editEmail().trim() || editEmail().includes(' ')) }"
-        />
-        @if (submitted() && !editEmail().trim()) {
-          <small class="field-error">El email es requerido.</small>
-        }
-        @if (submitted() && editEmail().includes(' ')) {
-          <small class="field-error">El email no puede contener espacios.</small>
-        }
-      </div>
-
-      <!-- Phone -->
-      <div class="field">
-        <label for="phone">Telefono <span class="required">*</span></label>
-        <input
-          pInputText
-          id="phone"
-          [ngModel]="editPhone()"
-          (input)="filterPhone($event)"
-          placeholder="10 digitos"
-          maxlength="15"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && (editPhone().length < 10 || !/^\\d+$/.test(editPhone())) }"
-        />
-        @if (submitted() && editPhone().length < 10) {
-          <small class="field-error">El telefono debe tener al menos 10 digitos.</small>
-        }
-      </div>
-
-      <!-- Address -->
-      <div class="field field-full">
-        <label for="address">Direccion <span class="required">*</span></label>
-        <input
-          pInputText
-          id="address"
-          [ngModel]="editAddress()"
-          (ngModelChange)="editAddress.set($event)"
-          placeholder="Direccion"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editAddress().trim() }"
-        />
-        @if (submitted() && !editAddress().trim()) {
-          <small class="field-error">La direccion es requerida.</small>
-        }
-      </div>
+    <div class="field">
+      <label for="memberSelect">Seleccionar usuario <span class="required">*</span></label>
+      <p-select
+        id="memberSelect"
+        [options]="availableUsers()"
+        [ngModel]="selectedUserId()"
+        (ngModelChange)="selectedUserId.set($event)"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="Selecciona un usuario"
+        [filter]="true"
+        filterPlaceholder="Buscar usuario..."
+        [disabled]="addingMember()"
+        styleClass="w-full"
+        appendTo="body"
+      />
     </div>
   </div>
 
@@ -235,12 +142,15 @@
       icon="pi pi-times"
       severity="secondary"
       [text]="true"
-      (onClick)="hideDialog()"
+      [disabled]="addingMember()"
+      (onClick)="hideAddMemberDialog()"
     />
     <p-button
-      label="Guardar"
+      label="Agregar"
       icon="pi pi-check"
-      (onClick)="saveUser()"
+      [loading]="addingMember()"
+      [disabled]="!selectedUserId()"
+      (onClick)="addMember()"
     />
   </ng-template>
 </p-dialog>

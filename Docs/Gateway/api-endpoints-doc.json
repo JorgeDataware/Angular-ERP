@@ -1,0 +1,4387 @@
+{
+  "serviceName": "ERP-API-Gateway",
+  "description": "Fastify-based API Gateway that proxies requests to three microservices: Users, Groups, and Tickets. Handles authentication, authorization, and request routing.",
+  "version": "1.0.0",
+  "architecture": {
+    "type": "API Gateway",
+    "framework": "Fastify",
+    "authenticationMechanism": "JWT (via Authorization header or jwt cookie)",
+    "microservices": [
+      {
+        "name": "Users Service",
+        "envVar": "USERS_SERVICE_URL",
+        "responsibilities": ["User management", "Authentication", "Permissions"]
+      },
+      {
+        "name": "Groups Service",
+        "envVar": "GROUPS_SERVICE_URL",
+        "responsibilities": ["Group management", "Member management"]
+      },
+      {
+        "name": "Tickets Service",
+        "envVar": "TICKETS_SERVICE_URL",
+        "responsibilities": [
+          "Ticket management",
+          "Assignment",
+          "Status workflow"
+        ]
+      }
+    ],
+    "authenticationFlow": [
+      "JWT tokens sent via Authorization: Bearer {token} header OR jwt cookie",
+      "Gateway validates tokens using app.authenticate() before proxying",
+      "Permissions checked at gateway level via app.requirePermission()",
+      "Some endpoints delegate authorization to microservices (e.g., ownership rules)"
+    ],
+    "responseStandard": {
+      "shape": "{ statusCode: number, intOpCode: string, message: string, data: array }",
+      "dataIsAlwaysArray": true,
+      "opCodePattern": "[S|E][SERVICE][ACTION][CODE]",
+      "opCodeExamples": {
+        "SUSLG200": "Success User Service Login 200",
+        "EGWAU401": "Error Gateway Authentication Unauthorized 401",
+        "STKRD200": "Success Ticket Service Read 200"
+      }
+    }
+  },
+  "globalEnums": {
+    "userStatus": {
+      "0": "Inactive",
+      "1": "Active"
+    },
+    "groupStatus": {
+      "0": "Inactive",
+      "1": "Active"
+    },
+    "ticketStatus": {
+      "1": "Open",
+      "2": "InProgress",
+      "3": "Closed"
+    },
+    "ticketPriority": {
+      "frontend": ["Low", "Medium", "High"],
+      "backend": {
+        "1": "Low",
+        "2": "Medium",
+        "3": "High"
+      },
+      "note": "Frontend sends priority as string (Low/Medium/High), backend stores as numeric (1/2/3)"
+    }
+  },
+  "globalPermissions": {
+    "userPermissions": [
+      "canCreate_Users",
+      "canRead_Users",
+      "canUpdate_Users",
+      "canDelete_Users"
+    ],
+    "groupPermissions": [
+      "canCreate_Groups",
+      "canRead_Groups",
+      "canUpdate_Groups",
+      "canDelete_Groups"
+    ],
+    "ticketPermissions": [
+      "canCreate_Tickets",
+      "canRead_Tickets",
+      "canUpdate_Tickets",
+      "canDelete_Tickets",
+      "canAssign_Tickets",
+      "canUpdateStatus_Tickets"
+    ]
+  },
+  "totalEndpoints": 29,
+  "endpointsByModule": {
+    "health": 1,
+    "auth": 2,
+    "users": 9,
+    "groups": 9,
+    "tickets": 8
+  },
+  "endpoints": [
+    {
+      "id": "health-check",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "health",
+      "controllerName": "app",
+      "gatewayEndpoint": "/health",
+      "internalEndpoint": "/health",
+      "httpMethod": "GET",
+      "summary": "Gateway health check",
+      "description": "Health check endpoint to verify that the API Gateway is running and responding.",
+      "requiresAuth": false,
+      "authType": "none",
+      "requiredPermissions": [],
+      "permissionNotes": "No authentication or permissions required. Public endpoint.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [],
+      "cookies": [],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGWHL200",
+          "message": "API Gateway is healthy.",
+          "whenItHappens": "Always - when gateway is running",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGWHL200",
+            "message": "API Gateway is healthy.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Simple health check endpoint",
+        "No proxying to microservices",
+        "Returns 200 OK if gateway is running",
+        "Useful for load balancers and monitoring"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": [],
+        "helpers": [],
+        "entities": [],
+        "claims": [],
+        "microserviceEndpoint": null
+      },
+      "frontendNotes": [
+        "Use for connectivity checks",
+        "No authentication needed",
+        "Can poll this endpoint to check gateway availability"
+      ],
+      "inferenceNotes": [
+        "OpCode SGWHL200 = Success Gateway Health 200",
+        "Defined directly in app.ts",
+        "Does not proxy to any microservice"
+      ]
+    },
+    {
+      "id": "auth-login",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "auth",
+      "controllerName": "authRoutes",
+      "gatewayEndpoint": "/auth/login",
+      "internalEndpoint": "/auth/login",
+      "httpMethod": "POST",
+      "summary": "Login",
+      "description": "Authenticates a user through the Users service.",
+      "requiresAuth": false,
+      "authType": "none",
+      "requiredPermissions": [],
+      "permissionNotes": "No authentication or permissions required for login.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "email": "jorge@test.com",
+        "password": "password123"
+      },
+      "fieldsRequired": ["email", "password"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "email must be a valid email format",
+        "password is required but no specific format validation is shown in gateway"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLG200",
+          "message": "Login successful.",
+          "whenItHappens": "When credentials are valid and user is authenticated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLG200",
+            "message": "Login successful.",
+            "data": [
+              {
+                "token": "eyJ...",
+                "expiresAt": "2026-04-20T18:00:00.000Z",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid credentials.",
+          "whenItHappens": "When email or password is incorrect",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid credentials.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies request to Users microservice at /api/User/login",
+        "Returns JWT token with expiration date and user permissions",
+        "Token should be stored by frontend for subsequent authenticated requests",
+        "Permissions array indicates what actions the user can perform"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": [],
+        "microserviceEndpoint": "/api/User/login"
+      },
+      "frontendNotes": [
+        "Store the returned token in localStorage or secure cookie",
+        "Store permissions array to control UI visibility",
+        "Use token in Authorization header as 'Bearer {token}' for subsequent requests",
+        "Also supported: send token in 'jwt' cookie",
+        "Handle 401 error with user-friendly message about invalid credentials",
+        "Redirect to home/dashboard after successful login"
+      ],
+      "inferenceNotes": [
+        "Response structure follows standard: {statusCode, intOpCode, message, data[]}",
+        "Data is always an array, even for single object responses",
+        "Actual authentication logic is in Users microservice",
+        "OpCode SUSLG200 = Success User Service Login 200",
+        "OpCode EUSAU401 = Error User Service Authentication Unauthorized 401"
+      ]
+    },
+    {
+      "id": "auth-logout",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "auth",
+      "controllerName": "authRoutes",
+      "gatewayEndpoint": "/auth/logout",
+      "internalEndpoint": "/auth/logout",
+      "httpMethod": "POST",
+      "summary": "Logout",
+      "description": "Logs out the current authenticated user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires valid JWT token but no specific permissions. Authentication is verified via app.authenticate() preHandler.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header. JWT token can be sent via cookie."
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "Valid JWT token required in Authorization header or jwt cookie",
+        "Token must be signed with JWT_SECRET_KEY",
+        "Token must have valid issuer and audience"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLO200",
+          "message": "Logout successful.",
+          "whenItHappens": "When user is authenticated and logout is processed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLO200",
+            "message": "Logout successful.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided in Authorization header or jwt cookie",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "When token is malformed, expired, or signature verification fails",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies request to Users microservice at /api/User/logout",
+        "Token validation happens in gateway before proxying",
+        "Actual logout logic (token invalidation) happens in Users microservice",
+        "Frontend should clear stored token after successful logout"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/logout"
+      },
+      "frontendNotes": [
+        "Clear stored token from localStorage/cookies after successful logout",
+        "Clear stored user permissions",
+        "Redirect to login page after logout",
+        "Handle 401 errors by redirecting to login",
+        "No request body needed for this endpoint"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSLO200 = Success User Service Logout 200",
+        "OpCode EGWAU401 = Error Gateway Authentication Unauthorized 401",
+        "Token can be sent via Authorization header OR jwt cookie",
+        "Gateway validates token before proxying to microservice"
+      ]
+    },
+    {
+      "id": "users-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users",
+      "internalEndpoint": "/users",
+      "httpMethod": "GET",
+      "summary": "Get users",
+      "description": "Retrieves the list of users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission. Validated in gateway via app.requirePermission().",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "Users retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "Users retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user is authenticated but doesn't have canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/GetUsers",
+        "Returns all users in the system",
+        "Each user includes their permissions array",
+        "middleName can be null"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/GetUsers"
+      },
+      "frontendNotes": [
+        "Use this endpoint to populate users list/table",
+        "Display firstName, middleName, lastName, email, userName",
+        "permissions array useful for showing user roles/capabilities",
+        "Handle middleName as optional (can be null)",
+        "Show 403 error when user lacks permission to view users list"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSRD200 = Success User Service Read 200",
+        "Returns array of user objects",
+        "Each user has permissions array"
+      ]
+    },
+    {
+      "id": "users-get-me",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/me",
+      "internalEndpoint": "/users/me",
+      "httpMethod": "GET",
+      "summary": "Get authenticated user",
+      "description": "Retrieves the currently authenticated user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication but no specific permissions. Any authenticated user can retrieve their own data.",
+      "ownershipRules": [
+        "User can only retrieve their own data based on JWT token"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSME200",
+          "message": "Authenticated user retrieved successfully.",
+          "whenItHappens": "When user is authenticated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSME200",
+            "message": "Authenticated user retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "When token is invalid, expired, or malformed",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/Me",
+        "Returns authenticated user's data based on JWT userId claim",
+        "Does not return permissions array (unlike get-all endpoint)",
+        "Useful for profile display"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/Me"
+      },
+      "frontendNotes": [
+        "Use this to display current user profile",
+        "Call after login to get user details",
+        "Does NOT include permissions (use login response for permissions)",
+        "Useful for profile page, navbar user display",
+        "Handle 401 by redirecting to login"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSME200 = Success User Service Me 200",
+        "Returns single user in array",
+        "User ID extracted from JWT token"
+      ]
+    },
+    {
+      "id": "users-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId",
+      "internalEndpoint": "/users/:userId",
+      "httpMethod": "GET",
+      "summary": "Get user by id",
+      "description": "Retrieves a specific user by id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["userId must be a valid UUID string"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "User retrieved successfully.",
+          "whenItHappens": "When user exists and requester has canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "User retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist in database",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/GetUserById/{userId}",
+        "Returns specific user with permissions array",
+        "Useful for user detail view"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/GetUserById/{userId}"
+      },
+      "frontendNotes": [
+        "Use for user detail modal/page",
+        "Display full user info including permissions",
+        "Handle 404 with user-friendly 'User not found' message",
+        "Permissions array shows what the user can do in the system"
+      ],
+      "inferenceNotes": [
+        "OpCode EUSNF404 = Error User Service Not Found 404",
+        "Returns single user in array format"
+      ]
+    },
+    {
+      "id": "users-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users",
+      "internalEndpoint": "/users",
+      "httpMethod": "POST",
+      "summary": "Create user",
+      "description": "Creates a new user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Users"],
+      "permissionNotes": "Requires canCreate_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["userName", "firstName", "lastName", "email", "password"],
+        "properties": {
+          "userName": {
+            "type": "string",
+            "description": "Username for login"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User's first name"
+          },
+          "middleName": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's middle name (optional)"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User's last name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address (must be unique)"
+          },
+          "password": {
+            "type": "string",
+            "description": "User's password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "userName": "jdoe",
+        "firstName": "John",
+        "middleName": "Michael",
+        "lastName": "Doe",
+        "email": "john.doe@test.com",
+        "password": "SecurePass123"
+      },
+      "fieldsRequired": [
+        "userName",
+        "firstName",
+        "lastName",
+        "email",
+        "password"
+      ],
+      "fieldsOptional": ["middleName"],
+      "validationRules": [
+        "email must be valid email format",
+        "email must be unique in system",
+        "all required fields must be provided"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "SUSCR201",
+          "message": "User created successfully.",
+          "whenItHappens": "When user is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "SUSCR201",
+            "message": "User created successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000010"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "When required fields are missing or data format is invalid",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EUSCF409",
+          "message": "A user with the same email already exists.",
+          "whenItHappens": "When email is already registered in system",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EUSCF409",
+            "message": "A user with the same email already exists.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/CreateUser",
+        "Email must be unique",
+        "Returns new user's ID",
+        "middleName is optional",
+        "Password validation rules enforced by microservice"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/CreateUser"
+      },
+      "frontendNotes": [
+        "Use returned ID to redirect to user detail or refresh users list",
+        "Show success message after 201",
+        "Handle 409 with specific message about duplicate email",
+        "Handle 400 with field validation errors",
+        "Refresh users list after successful creation",
+        "middleName field is optional in form"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSCR201 = Success User Service Create 201",
+        "OpCode EUSBR400 = Error User Service Bad Request 400",
+        "OpCode EUSCF409 = Error User Service Conflict 409",
+        "Returns only the new user's ID"
+      ]
+    },
+    {
+      "id": "users-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId",
+      "internalEndpoint": "/users/:userId",
+      "httpMethod": "PUT",
+      "summary": "Update user",
+      "description": "Updates a user. This operation is available to privileged users or to the same authenticated user depending on backend rules.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication. Permission check delegated to microservice based on ownership rules.",
+      "ownershipRules": [
+        "User can update their own profile (inferred)",
+        "Users with canUpdate_Users permission can update any user (inferred)",
+        "Actual authorization logic in microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to update (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "userName": {
+            "type": "string",
+            "description": "Username for login"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User's first name"
+          },
+          "middleName": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's middle name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User's last name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "userName": "jdoe_updated",
+        "firstName": "John",
+        "middleName": "Michael",
+        "lastName": "Doe",
+        "email": "john.updated@test.com"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": [
+        "userName",
+        "firstName",
+        "middleName",
+        "lastName",
+        "email"
+      ],
+      "validationRules": [
+        "email must be valid email format if provided",
+        "at least one field should be provided to update (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSUP200",
+          "message": "User updated successfully.",
+          "whenItHappens": "When user is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSUP200",
+            "message": "User updated successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "You are not authorized to update this user.",
+          "whenItHappens": "When user tries to update another user without permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "You are not authorized to update this user.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/UpdateUser/{userId}",
+        "Authorization rules enforced by microservice",
+        "User can update own profile",
+        "Privileged users can update any user (inferred from description)",
+        "Returns updated user's ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/UpdateUser/{userId}"
+      },
+      "frontendNotes": [
+        "Use for user profile edit form",
+        "All fields are optional (send only changed fields)",
+        "Handle 403 with clear authorization error message",
+        "Refresh user data after successful update",
+        "For editing own profile, use /users/me to get current data first"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSUP200 = Success User Service Update 200",
+        "OpCode EUSFB403 = Error User Service Forbidden 403",
+        "No gateway-level permission check, delegated to microservice",
+        "All fields are optional in schema"
+      ]
+    },
+    {
+      "id": "users-update-permissions",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/permissions",
+      "internalEndpoint": "/users/:userId/permissions",
+      "httpMethod": "PUT",
+      "summary": "Update user permissions",
+      "description": "Updates the permissions of a specific user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Users"],
+      "permissionNotes": "Requires canUpdate_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to update permissions (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "permissionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Array of permission IDs to assign to user"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "permissionIds": [
+          "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+          "019d5a1b-cee1-7e2d-b1b0-79a8c75197e4"
+        ]
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": ["permissionIds"],
+      "validationRules": [
+        "permissionIds must be array of valid UUID strings (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPM200",
+          "message": "User permissions updated successfully.",
+          "whenItHappens": "When permissions are updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPM200",
+            "message": "User permissions updated successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/UpdateUserPermissions/{userId}",
+        "Requires canUpdate_Users permission",
+        "Replaces user's permissions with provided array",
+        "Get available permissions from /users/permissions endpoint first"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User", "Permission"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/UpdateUserPermissions/{userId}"
+      },
+      "frontendNotes": [
+        "Use /users/permissions to get list of available permissions first",
+        "Show multi-select or checkbox list of permissions",
+        "Send array of permission IDs",
+        "Refresh user data after update to see new permissions",
+        "This is typically admin-only functionality"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSPM200 = Success User Service Permissions 200",
+        "Likely replaces all permissions (not additive - inferred)",
+        "Frontend should fetch current permissions before update"
+      ]
+    },
+    {
+      "id": "users-change-password",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/password",
+      "internalEndpoint": "/users/:userId/password",
+      "httpMethod": "PATCH",
+      "summary": "Change user password",
+      "description": "Changes the password of a user. This operation is available to privileged users or to the same authenticated user depending on backend rules.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication. Authorization delegated to microservice.",
+      "ownershipRules": [
+        "User can change their own password (must provide currentPassword)",
+        "Privileged users can change any user's password (currentPassword may be optional - inferred)",
+        "Actual authorization logic in microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["newPassword"],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current password (required when user changes own password)"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "New password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "currentPassword": "OldPass123",
+        "newPassword": "NewSecurePass456"
+      },
+      "fieldsRequired": ["newPassword"],
+      "fieldsOptional": ["currentPassword"],
+      "validationRules": [
+        "newPassword is required",
+        "currentPassword required when user changes own password (enforced by microservice)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPW200",
+          "message": "Password updated successfully.",
+          "whenItHappens": "When password is changed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPW200",
+            "message": "Password updated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "You are not authorized to update this password.",
+          "whenItHappens": "When user tries to change another user's password without permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "You are not authorized to update this password.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EUSCF409",
+          "message": "Current password is invalid.",
+          "whenItHappens": "When currentPassword doesn't match user's actual current password",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EUSCF409",
+            "message": "Current password is invalid.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/ChangePassword/{userId}",
+        "User changing own password must provide currentPassword",
+        "Admin/privileged users may change password without currentPassword (inferred)",
+        "Validates currentPassword before allowing change",
+        "Does not return any data, only status"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/ChangePassword/{userId}"
+      },
+      "frontendNotes": [
+        "For user changing own password: require currentPassword field",
+        "Handle 409 with message about incorrect current password",
+        "Show success message after 200",
+        "Consider forcing re-login after password change",
+        "Validate newPassword strength on frontend before sending"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSPW200 = Success User Service Password 200",
+        "currentPassword is nullable, enforcement logic in microservice",
+        "No data returned on success"
+      ]
+    },
+    {
+      "id": "users-get-permissions",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/permissions",
+      "internalEndpoint": "/users/permissions",
+      "httpMethod": "GET",
+      "summary": "Get all permissions",
+      "description": "Retrieves the full list of available permissions.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRP200",
+          "message": "Permissions retrieved successfully.",
+          "whenItHappens": "When permissions are retrieved successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRP200",
+            "message": "Permissions retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "canRead_Users"
+              }
+            ]
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/permissions",
+        "Returns all available permissions in system",
+        "Used for permission assignment UI"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Permission"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/permissions"
+      },
+      "frontendNotes": [
+        "Use this to populate permission selection UI",
+        "Call before updating user permissions",
+        "Display permission.name in human-readable format",
+        "Store permission.id for update requests",
+        "Typically used in admin user management screens"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSRP200 = Success User Service Read Permissions 200",
+        "Returns array of {id, name} objects",
+        "Permission names follow pattern: can{Action}_{Resource}"
+      ]
+    },
+    {
+      "id": "users-update-status",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/status",
+      "internalEndpoint": "/users/:userId/status",
+      "httpMethod": "DELETE",
+      "summary": "Deactivate user",
+      "description": "Updates the status of a user, typically used for deactivation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canDelete_Users"],
+      "permissionNotes": "Requires canDelete_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to deactivate (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "Status code (0 = inactive, 1 = active - inferred)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "status": 0
+      },
+      "fieldsRequired": ["status"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "status must be integer",
+        "valid status values likely 0 or 1 (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSDU200",
+          "message": "User deactivated successfully.",
+          "whenItHappens": "When user status is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSDU200",
+            "message": "User deactivated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/{userId}/status",
+        "Logical deletion - user not physically deleted",
+        "Status field controls active/inactive state",
+        "Requires canDelete_Users permission"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/{userId}/status"
+      },
+      "frontendNotes": [
+        "Use for user deactivation (soft delete)",
+        "Show confirmation dialog before deactivation",
+        "Refresh users list after successful deactivation",
+        "Consider filtering inactive users in main list",
+        "May want toggle button for activate/deactivate"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSDU200 = Success User Service Deactivate User 200",
+        "Uses DELETE method but requires body with status",
+        "Likely supports reactivation by sending status: 1",
+        "Status values inferred: 0=inactive, 1=active"
+      ]
+    },
+    {
+      "id": "groups-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups",
+      "internalEndpoint": "/groups",
+      "httpMethod": "GET",
+      "summary": "Get groups",
+      "description": "Retrieves the list of groups.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Groups retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Groups permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Groups retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "Soporte",
+                "description": "Grupo de soporte técnico",
+                "owner": "Juan Pérez",
+                "status": 1
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Groups permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroups",
+        "Returns all groups in system",
+        "status field: 1=active, 0=inactive (inferred)",
+        "owner field shows owner's full name"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroups"
+      },
+      "frontendNotes": [
+        "Use for groups list/table",
+        "Display name, description, owner, status",
+        "Status 1=Active, 0=Inactive",
+        "Filter by status if needed",
+        "Click to navigate to group detail"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRRD200 = Success Group Service Read 200",
+        "Returns array of group objects",
+        "owner is string (user's name), not ID"
+      ]
+    },
+    {
+      "id": "groups-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId",
+      "internalEndpoint": "/groups/:groupId",
+      "httpMethod": "GET",
+      "summary": "Get group by id",
+      "description": "Retrieves the detail of a specific group by its id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Group retrieved successfully.",
+          "whenItHappens": "When group exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Group retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "Soporte",
+                "description": "Grupo de soporte técnico",
+                "createdByUserId": "00000000-0000-0000-0000-000000000001",
+                "owner": "Juan Pérez",
+                "status": 1,
+                "members": [
+                  {
+                    "id": "00000000-0000-0000-0000-000000000003",
+                    "userName": "mlopez",
+                    "completeName": "María López"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroupById/{groupId}",
+        "Returns detailed group info including members list",
+        "Includes createdByUserId for ownership validation",
+        "members array contains user id, userName, and completeName"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroupById/{groupId}"
+      },
+      "frontendNotes": [
+        "Use for group detail page/modal",
+        "Show group info and members list",
+        "createdByUserId used to determine if current user is owner",
+        "Display members in table with userName and completeName",
+        "Use for checking ownership before edit/delete operations"
+      ],
+      "inferenceNotes": [
+        "OpCode EGRNF404 = Error Group Service Not Found 404",
+        "Includes members array not present in get-all",
+        "createdByUserId identifies the owner"
+      ]
+    },
+    {
+      "id": "groups-get-members",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/members",
+      "internalEndpoint": "/groups/:groupId/members",
+      "httpMethod": "GET",
+      "summary": "Get group members",
+      "description": "Retrieves the list of members of a specific group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Group members retrieved successfully.",
+          "whenItHappens": "When group exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Group members retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000003",
+                "userName": "mlopez",
+                "completeName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroupMembers/{groupId}",
+        "Returns only members list without group details",
+        "Alternative to getting full group with /groups/:groupId"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroupMembers/{groupId}"
+      },
+      "frontendNotes": [
+        "Use when only members list is needed",
+        "More efficient than fetching full group",
+        "Display members in dropdown for ticket assignment",
+        "Show userName and completeName"
+      ],
+      "inferenceNotes": [
+        "Returns same member structure as get-by-id endpoint",
+        "Lighter weight than full group fetch"
+      ]
+    },
+    {
+      "id": "groups-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups",
+      "internalEndpoint": "/groups",
+      "httpMethod": "POST",
+      "summary": "Create group",
+      "description": "Creates a new group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Groups"],
+      "permissionNotes": "Requires canCreate_Groups permission.",
+      "ownershipRules": [
+        "Authenticated user becomes the group owner (inferred)"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Group description"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "name": "Desarrollo",
+        "description": "Equipo de desarrollo de software"
+      },
+      "fieldsRequired": ["name", "description"],
+      "fieldsOptional": [],
+      "validationRules": ["name must be unique"],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "SGRCR201",
+          "message": "Group created successfully.",
+          "whenItHappens": "When group is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "SGRCR201",
+            "message": "Group created successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EGRBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "When required fields are missing or invalid",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EGRBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "A group with the same name already exists.",
+          "whenItHappens": "When group name already exists",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "A group with the same name already exists.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/AddGroup",
+        "Group name must be unique",
+        "Authenticated user becomes owner",
+        "Group starts with active status (inferred)",
+        "Returns new group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/AddGroup"
+      },
+      "frontendNotes": [
+        "Use returned ID to redirect to group detail",
+        "Handle 409 with clear message about duplicate name",
+        "Refresh groups list after creation",
+        "Show success message with new group name"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRCR201 = Success Group Service Create 201",
+        "OpCode EGRBR400 = Error Group Service Bad Request 400",
+        "OpCode EGRCF409 = Error Group Service Conflict 409",
+        "Owner is set from JWT userId claim"
+      ]
+    },
+    {
+      "id": "groups-add-member",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/members",
+      "internalEndpoint": "/groups/members",
+      "httpMethod": "POST",
+      "summary": "Add group member",
+      "description": "Adds a user as member of a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can add members",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["groupId", "memberId"],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "description": "Group ID (UUID)"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "User ID to add as member (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+        "memberId": "00000000-0000-0000-0000-000000000005"
+      },
+      "fieldsRequired": ["groupId", "memberId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "groupId must be valid UUID",
+        "memberId must be valid UUID",
+        "group must be active",
+        "user must exist and be active (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRMB200",
+          "message": "Group member added successfully.",
+          "whenItHappens": "When member is added successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRMB200",
+            "message": "Group member added successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can add members.",
+          "whenItHappens": "When non-owner tries to add member",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can add members.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group was not found or is inactive.",
+          "whenItHappens": "When group is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group was not found or is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/AddMember",
+        "Only group owner can add members",
+        "Group must be active (status=1)",
+        "User must exist and be active",
+        "Cannot add duplicate members (inferred)",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/AddMember"
+      },
+      "frontendNotes": [
+        "Show user selection dropdown filtered by non-members",
+        "Handle 403 with clear ownership message",
+        "Refresh group members list after success",
+        "Disable if current user is not owner",
+        "Handle 409 for inactive group scenario"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRMB200 = Success Group Service Member 200",
+        "OpCode EGRFB403 = Error Group Service Forbidden 403",
+        "Ownership validated in microservice",
+        "Returns groupId, not memberId"
+      ]
+    },
+    {
+      "id": "groups-remove-member",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/members",
+      "internalEndpoint": "/groups/members",
+      "httpMethod": "DELETE",
+      "summary": "Remove group member",
+      "description": "Removes a user from a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can remove members",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["groupId", "memberId"],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "description": "Group ID (UUID)"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "User ID to remove (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+        "memberId": "00000000-0000-0000-0000-000000000005"
+      },
+      "fieldsRequired": ["groupId", "memberId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "groupId must be valid UUID",
+        "memberId must be valid UUID",
+        "group must be active",
+        "member must exist in group"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRMB200",
+          "message": "Group member removed successfully.",
+          "whenItHappens": "When member is removed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRMB200",
+            "message": "Group member removed successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can remove members.",
+          "whenItHappens": "When non-owner tries to remove member",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can remove members.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified member was not found in the group.",
+          "whenItHappens": "When memberId is not in the group",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified member was not found in the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group was not found or is inactive.",
+          "whenItHappens": "When group is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group was not found or is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/RemoveMember",
+        "Only group owner can remove members",
+        "Group must be active (status=1)",
+        "Member must exist in group",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/RemoveMember"
+      },
+      "frontendNotes": [
+        "Show remove button only for group owner",
+        "Confirm before removal",
+        "Handle 404 if member not in group",
+        "Refresh members list after success",
+        "Cannot remove owner (inferred - validate on frontend)"
+      ],
+      "inferenceNotes": [
+        "Same OpCode as add member (SGRMB200)",
+        "Different 404 message for not found member vs group",
+        "Ownership validated in microservice"
+      ]
+    },
+    {
+      "id": "groups-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId",
+      "internalEndpoint": "/groups/:groupId",
+      "httpMethod": "PATCH",
+      "summary": "Edit group",
+      "description": "Updates the data of a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can edit group",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID to update (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Group description"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "name": "Soporte Técnico",
+        "description": "Equipo de soporte técnico actualizado"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": ["name", "description"],
+      "validationRules": [
+        "name must be unique if changed",
+        "group must be active",
+        "at least one field should be provided (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRUP200",
+          "message": "Group updated successfully.",
+          "whenItHappens": "When group is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRUP200",
+            "message": "Group updated successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can edit the group.",
+          "whenItHappens": "When non-owner tries to edit",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can edit the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group is inactive.",
+          "whenItHappens": "When group status is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/EditGroup/{groupId}",
+        "Only owner can edit",
+        "Group must be active",
+        "Name must remain unique if changed",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/EditGroup/{groupId}"
+      },
+      "frontendNotes": [
+        "Show edit form only to group owner",
+        "Pre-populate form with current values",
+        "Handle 409 for inactive group",
+        "Refresh group detail after update",
+        "All fields optional (send only changed)"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRUP200 = Success Group Service Update 200",
+        "Uses PATCH method (partial update)",
+        "Inactive groups cannot be edited"
+      ]
+    },
+    {
+      "id": "groups-deactivate",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/deactivate",
+      "internalEndpoint": "/groups/:groupId/deactivate",
+      "httpMethod": "PATCH",
+      "summary": "Deactivate group",
+      "description": "Performs a logical deactivation of a group. The owner or superadmin can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canDelete_Groups"],
+      "permissionNotes": "Requires canDelete_Groups permission at gateway level. Additional ownership validation in microservice.",
+      "ownershipRules": [
+        "Group owner can deactivate own group",
+        "Superadmin can deactivate any group",
+        "Validated by microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID to deactivate (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID", "group must be active"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRDL200",
+          "message": "Group deactivated successfully.",
+          "whenItHappens": "When group is deactivated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRDL200",
+            "message": "Group deactivated successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner or superadmin can deactivate the group.",
+          "whenItHappens": "When non-owner/non-admin tries to deactivate",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner or superadmin can deactivate the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The group is already inactive.",
+          "whenItHappens": "When group is already inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The group is already inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/{groupId}/deactivate",
+        "Logical deletion (soft delete)",
+        "Owner or superadmin can deactivate",
+        "Cannot deactivate already inactive group",
+        "Sets group status to 0 (inactive)"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/{groupId}/deactivate"
+      },
+      "frontendNotes": [
+        "Show confirmation dialog before deactivation",
+        "Show deactivate button only to owner or admin",
+        "Handle 409 for already inactive groups",
+        "Refresh groups list after deactivation",
+        "Consider filtering inactive groups in list",
+        "Deactivated groups cannot have new tickets (inferred)"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRDL200 = Success Group Service Delete/Deactivate 200",
+        "Soft delete, not hard delete",
+        "Superadmin role determined by microservice"
+      ]
+    },
+    {
+      "id": "groups-get-tickets",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/tickets",
+      "internalEndpoint": "/groups/:groupId/tickets",
+      "httpMethod": "GET",
+      "summary": "Get tickets of a group",
+      "description": "Retrieves all tickets that belong to a specific group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission. Proxies to Tickets microservice.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Group tickets retrieved successfully.",
+          "whenItHappens": "When tickets are retrieved successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Group tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "status": 1,
+                "priority": 3,
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/group/{groupId}",
+        "Returns all tickets for specified group",
+        "Includes basic ticket info",
+        "status: 1=Open, 2=InProgress, 3=Closed (inferred)",
+        "priority: 1=Low, 2=Medium, 3=High (inferred)"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/group/{groupId}"
+      },
+      "frontendNotes": [
+        "Use for group detail page to show tickets",
+        "Display tickets in table/kanban board",
+        "Filter by status/priority",
+        "Click ticket to view detail",
+        "Useful for group-specific ticket views",
+        "OpCode is from Tickets service (STKRD200)"
+      ],
+      "inferenceNotes": [
+        "OpCode ETKNF404 = Error Ticket Service Not Found 404",
+        "OpCode STKRD200 = Success Ticket Service Read 200",
+        "This endpoint is in groups routes but proxies to Tickets service",
+        "Validates canRead_Groups, not canRead_Tickets"
+      ]
+    },
+    {
+      "id": "tickets-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets",
+      "internalEndpoint": "/tickets",
+      "httpMethod": "GET",
+      "summary": "Get tickets",
+      "description": "Retrieves the list of all tickets, including assigned and unassigned tickets.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Tickets retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": "00000000-0000-0000-0000-000000000003",
+                "assignedUserName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets",
+        "Returns all tickets (assigned and unassigned)",
+        "Includes creator and assigned user info",
+        "status: 1=Open, 2=InProgress, 3=Closed (inferred)",
+        "priority: 1=Low, 2=Medium, 3=High (from schema enum)",
+        "comments and dueDate are optional (can be null)",
+        "assignedUserId and assignedUserName are null for unassigned tickets"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets"
+      },
+      "frontendNotes": [
+        "Use for main tickets dashboard/table",
+        "Display in table or kanban board",
+        "Group by status or priority",
+        "Filter by assignee, creator, group, status",
+        "Show visual indicators for priority (High=3, Medium=2, Low=1)",
+        "Highlight overdue tickets (dueDate < now)",
+        "assignedUserName null means unassigned"
+      ],
+      "inferenceNotes": [
+        "OpCode STKRD200 = Success Ticket Service Read 200",
+        "Comprehensive ticket data including relationships",
+        "Priority values: Low, Medium, High map to 1, 2, 3"
+      ]
+    },
+    {
+      "id": "tickets-get-pending",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/pending",
+      "internalEndpoint": "/tickets/pending",
+      "httpMethod": "GET",
+      "summary": "Get pending tickets",
+      "description": "Retrieves open and unassigned tickets. Regular users only see pending tickets of groups they own. Superadmin can see all pending tickets.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission. Filtered by ownership in microservice.",
+      "ownershipRules": [
+        "Regular users see pending tickets only from groups they own",
+        "Superadmin sees all pending tickets",
+        "Determined by microservice based on user role"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Pending tickets retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Pending tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": null,
+                "assignedUserName": null
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Tickets permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/pending",
+        "Returns only open (status=1) and unassigned tickets",
+        "Regular users: filtered to groups they own",
+        "Superadmin: sees all pending tickets",
+        "assignedUserId and assignedUserName are always null",
+        "Useful for ticket assignment workflow"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/pending"
+      },
+      "frontendNotes": [
+        "Use for pending tickets queue/board",
+        "Show only to group owners and admins",
+        "Primary view for ticket assignment",
+        "Highlight urgent pending tickets (high priority or near dueDate)",
+        "assignedUserId is always null in this list",
+        "Filter by group if user owns multiple groups",
+        "Show assign button for each ticket"
+      ],
+      "inferenceNotes": [
+        "Filtered by user role and group ownership in microservice",
+        "status must be 1 (Open)",
+        "assignedUserId must be null",
+        "Critical for assignment workflow"
+      ]
+    },
+    {
+      "id": "tickets-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "GET",
+      "summary": "Get ticket by id",
+      "description": "Retrieves the detail of a single ticket by its id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requires canRead_Tickets permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["ticketId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Ticket retrieved successfully.",
+          "whenItHappens": "When ticket exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Ticket retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "comments": "Reportado por compras.",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2026-04-06T12:00:00.000Z",
+                "updatedAt": "2026-04-06T12:30:00.000Z",
+                "dueDate": "2026-04-20T18:00:00.000Z",
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte",
+                "createdByUserId": "00000000-0000-0000-0000-000000000002",
+                "createdByUserName": "Juan Pérez",
+                "assignedUserId": "00000000-0000-0000-0000-000000000003",
+                "assignedUserName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}",
+        "Returns complete ticket details",
+        "Includes creator and assigned user info",
+        "Includes timestamps for tracking"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}"
+      },
+      "frontendNotes": [
+        "Use for ticket detail modal/page",
+        "Show all ticket information",
+        "Display createdByUserName and assignedUserName",
+        "Show status badge and priority indicator",
+        "Enable edit button if user is creator or admin",
+        "Enable status change buttons if user is assignee",
+        "Handle 404 with user-friendly message"
+      ],
+      "inferenceNotes": [
+        "OpCode ETKNF404 = Error Ticket Service Not Found 404",
+        "Same response structure as get-all",
+        "Returns single ticket in array"
+      ]
+    },
+    {
+      "id": "tickets-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets",
+      "internalEndpoint": "/tickets",
+      "httpMethod": "POST",
+      "summary": "Create ticket",
+      "description": "Creates a new ticket.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Tickets"],
+      "permissionNotes": "Requires canCreate_Tickets permission.",
+      "ownershipRules": [
+        "Authenticated user becomes the ticket creator",
+        "createdByUserId set from JWT userId claim"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["title", "description", "priority", "groupId"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Ticket title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Detailed description of the issue"
+          },
+          "comments": {
+            "type": "string",
+            "nullable": true,
+            "description": "Additional comments (optional)"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["Low", "Medium", "High"],
+            "description": "Ticket priority level"
+          },
+          "dueDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Due date (ISO 8601 format, optional)"
+          },
+          "groupId": {
+            "type": "string",
+            "description": "Target group ID (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "title": "Sistema lento",
+        "description": "El sistema está muy lento desde esta mañana",
+        "comments": "Reportado por 3 usuarios",
+        "priority": "High",
+        "dueDate": "2026-04-15T18:00:00.000Z",
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+      },
+      "fieldsRequired": ["title", "description", "priority", "groupId"],
+      "fieldsOptional": ["comments", "dueDate"],
+      "validationRules": [
+        "priority must be one of: Low, Medium, High",
+        "groupId must be valid UUID and exist",
+        "group must be active",
+        "dueDate must be valid ISO 8601 date string if provided"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "STKCR201",
+          "message": "Ticket created successfully.",
+          "whenItHappens": "When ticket is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "STKCR201",
+            "message": "Ticket created successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The specified group is inactive.",
+          "whenItHappens": "When group exists but is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The specified group is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets",
+        "Ticket created with status=Open (1)",
+        "Ticket is unassigned initially (assignedUserId=null)",
+        "Group must exist and be active",
+        "createdByUserId set from JWT token",
+        "Returns new ticket ID",
+        "priority string converted to numeric in microservice"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets"
+      },
+      "frontendNotes": [
+        "Use for create ticket form",
+        "Provide group selection dropdown",
+        "Priority dropdown with Low/Medium/High options",
+        "Make comments and dueDate optional",
+        "Use returned ID to redirect to ticket detail or refresh list",
+        "Handle 409 if group is inactive",
+        "Show success message with ticket title",
+        "Refresh tickets list after creation"
+      ],
+      "inferenceNotes": [
+        "OpCode STKCR201 = Success Ticket Service Create 201",
+        "OpCode ETKCF409 = Error Ticket Service Conflict 409",
+        "Priority enum: Low, Medium, High (frontend sends string)",
+        "Ticket starts as Open and Unassigned"
+      ]
+    },
+    {
+      "id": "tickets-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "PATCH",
+      "summary": "Edit ticket",
+      "description": "Updates editable fields of an open ticket. Only the creator or superadmin can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Tickets"],
+      "permissionNotes": "Requires canUpdate_Tickets permission at gateway. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only ticket creator can edit",
+        "Superadmin can edit any ticket",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID to update (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Ticket title"
+          },
+          "description": {
+            "type": "string",
+            "description": "Ticket description"
+          },
+          "comments": {
+            "type": "string",
+            "nullable": true,
+            "description": "Additional comments"
+          },
+          "priority": {
+            "type": "string",
+            "enum": ["Low", "Medium", "High"],
+            "description": "Ticket priority"
+          },
+          "dueDate": {
+            "type": "string",
+            "nullable": true,
+            "description": "Due date (ISO 8601)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "title": "Sistema muy lento - Actualizado",
+        "description": "El sistema está muy lento desde esta mañana. Afecta a todos los módulos.",
+        "comments": "Reportado por 5 usuarios ahora",
+        "priority": "High",
+        "dueDate": "2026-04-10T18:00:00.000Z"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": [
+        "title",
+        "description",
+        "comments",
+        "priority",
+        "dueDate"
+      ],
+      "validationRules": [
+        "ticket must be Open (status=1)",
+        "priority must be Low, Medium, or High if provided",
+        "at least one field should be provided (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKUP200",
+          "message": "Ticket updated successfully.",
+          "whenItHappens": "When ticket is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKUP200",
+            "message": "Ticket updated successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to edit this ticket.",
+          "whenItHappens": "When non-creator/non-admin tries to edit",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to edit this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot be edited because it is not open.",
+          "whenItHappens": "When ticket status is not Open (InProgress or Closed)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be edited because it is not open.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}",
+        "Only creator or superadmin can edit",
+        "Ticket must be Open (status=1)",
+        "Cannot edit InProgress or Closed tickets",
+        "Does not change status, assignee, or group",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}"
+      },
+      "frontendNotes": [
+        "Show edit button only for creator or admin",
+        "Disable edit if status is not Open",
+        "Pre-populate form with current values",
+        "Handle 409 with message about ticket status",
+        "All fields optional (send only changed)",
+        "Refresh ticket detail after update",
+        "Cannot change group or assignee (use specific endpoints)"
+      ],
+      "inferenceNotes": [
+        "OpCode STKUP200 = Success Ticket Service Update 200",
+        "OpCode ETKFB403 = Error Ticket Service Forbidden 403",
+        "PATCH method indicates partial update",
+        "Status restriction: only Open tickets editable"
+      ]
+    },
+    {
+      "id": "tickets-assign",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/assign",
+      "internalEndpoint": "/tickets/:ticketId/assign",
+      "httpMethod": "POST",
+      "summary": "Assign ticket",
+      "description": "Assigns an open ticket to an active user that belongs to the ticket group. Only the group owner or superadmin can assign.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canAssign_Tickets"],
+      "permissionNotes": "Requires canAssign_Tickets permission at gateway. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can assign tickets",
+        "Superadmin can assign any ticket",
+        "Validated by microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID to assign (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["assignedUserId"],
+        "properties": {
+          "assignedUserId": {
+            "type": "string",
+            "description": "User ID to assign ticket to (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "assignedUserId": "00000000-0000-0000-0000-000000000003"
+      },
+      "fieldsRequired": ["assignedUserId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "assignedUserId must be valid UUID",
+        "ticket must be Open (status=1)",
+        "ticket must be unassigned",
+        "user must be active member of ticket's group"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKAS200",
+          "message": "Ticket assigned successfully.",
+          "whenItHappens": "When ticket is assigned successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKAS200",
+            "message": "Ticket assigned successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to assign this ticket.",
+          "whenItHappens": "When non-owner/non-admin tries to assign",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to assign this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket is already assigned.",
+          "whenItHappens": "When ticket already has an assignedUserId",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket is already assigned.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/assign",
+        "Only group owner or superadmin can assign",
+        "Ticket must be Open and Unassigned",
+        "User must be active group member",
+        "Sets assignedUserId field",
+        "Ticket remains in Open status",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "User", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/assign"
+      },
+      "frontendNotes": [
+        "Show assign button only for group owner/admin",
+        "Disable if ticket already assigned",
+        "Populate dropdown with group members from /groups/:groupId/members",
+        "Handle 409 if already assigned",
+        "Refresh ticket detail and pending list after assignment",
+        "Show assignee name after successful assignment",
+        "Primary action for pending tickets view"
+      ],
+      "inferenceNotes": [
+        "OpCode STKAS200 = Success Ticket Service Assign 200",
+        "User must be group member (validated in microservice)",
+        "Ticket stays Open after assignment",
+        "Next step: assigned user starts work"
+      ]
+    },
+    {
+      "id": "tickets-start-work",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/start-work",
+      "internalEndpoint": "/tickets/:ticketId/start-work",
+      "httpMethod": "POST",
+      "summary": "Start work on ticket",
+      "description": "Changes the status of the assigned ticket from Open to InProgress. Only the assigned user can do this.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requires canUpdateStatus_Tickets permission at gateway. Assignee validation in microservice.",
+      "ownershipRules": [
+        "Only assigned user can start work",
+        "Validated by microservice based on assignedUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "ticket must be Open (status=1)",
+        "ticket must be assigned",
+        "current user must be the assignee"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKSW200",
+          "message": "Work started successfully.",
+          "whenItHappens": "When status changes from Open to InProgress",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKSW200",
+            "message": "Work started successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to start work on this ticket.",
+          "whenItHappens": "When user is not the assignee",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to start work on this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot start work because it is not open.",
+          "whenItHappens": "When ticket is not in Open status",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot start work because it is not open.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/start-work",
+        "Changes status from Open (1) to InProgress (2)",
+        "Only assigned user can start work",
+        "Ticket must be Open and Assigned",
+        "Updates updatedAt timestamp",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/start-work"
+      },
+      "frontendNotes": [
+        "Show 'Start Work' button only to assignee",
+        "Disable if status is not Open",
+        "Update ticket status badge to InProgress after success",
+        "Refresh ticket detail and my tickets list",
+        "Handle 409 if ticket not in Open status",
+        "Typical workflow: assign → start work → finish"
+      ],
+      "inferenceNotes": [
+        "OpCode STKSW200 = Success Ticket Service Start Work 200",
+        "Status transition: Open (1) → InProgress (2)",
+        "Only assignee authorized",
+        "Part of standard ticket workflow"
+      ]
+    },
+    {
+      "id": "tickets-finish",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "tickets",
+      "controllerName": "ticketsRoutes",
+      "gatewayEndpoint": "/tickets/:ticketId/finish",
+      "internalEndpoint": "/tickets/:ticketId/finish",
+      "httpMethod": "POST",
+      "summary": "Finish ticket",
+      "description": "Changes the status of the assigned ticket from InProgress to Closed. Only the assigned user can do this.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requires canUpdateStatus_Tickets permission at gateway. Assignee validation in microservice.",
+      "ownershipRules": [
+        "Only assigned user can finish ticket",
+        "Validated by microservice based on assignedUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string",
+          "required": true,
+          "description": "Ticket ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "ticket must be InProgress (status=2)",
+        "ticket must be assigned",
+        "current user must be the assignee"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKFN200",
+          "message": "Ticket finished successfully.",
+          "whenItHappens": "When status changes from InProgress to Closed",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKFN200",
+            "message": "Ticket finished successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You are not authorized to finish this ticket.",
+          "whenItHappens": "When user is not the assignee",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to finish this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "When ticketId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot be finished because it is not in progress.",
+          "whenItHappens": "When ticket is not in InProgress status",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be finished because it is not in progress.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/{ticketId}/finish",
+        "Changes status from InProgress (2) to Closed (3)",
+        "Only assigned user can finish",
+        "Ticket must be InProgress",
+        "Updates updatedAt timestamp",
+        "Closed tickets cannot be edited",
+        "Returns ticket ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/{ticketId}/finish"
+      },
+      "frontendNotes": [
+        "Show 'Finish' button only to assignee",
+        "Disable if status is not InProgress",
+        "Update ticket status badge to Closed after success",
+        "Refresh ticket detail and my tickets list",
+        "Handle 409 if ticket not in InProgress status",
+        "Consider showing completion confirmation",
+        "Move to closed tickets section after finish",
+        "Final step in ticket workflow"
+      ],
+      "inferenceNotes": [
+        "OpCode STKFN200 = Success Ticket Service Finish 200",
+        "Status transition: InProgress (2) → Closed (3)",
+        "Only assignee authorized",
+        "Completes ticket lifecycle"
+      ]
+    }
+  ],
+  "frontendRouteMappingHints": {
+    "loginPage": ["/auth/login"],
+    "dashboardPage": ["/health", "/users/me", "/tickets", "/groups"],
+    "usersManagementPage": [
+      "/users",
+      "/users/:userId",
+      "/users/permissions",
+      "/users/:userId/permissions"
+    ],
+    "groupsManagementPage": [
+      "/groups",
+      "/groups/:groupId",
+      "/groups/:groupId/members",
+      "/groups/members"
+    ],
+    "ticketsManagementPage": [
+      "/tickets",
+      "/tickets/:ticketId",
+      "/tickets/pending"
+    ],
+    "myProfilePage": ["/users/me", "/users/:userId/password"],
+    "ticketAssignmentPage": ["/tickets/pending", "/tickets/:ticketId/assign"],
+    "myTicketsPage": [
+      "/tickets (filter by assignedUserId)",
+      "/tickets/:ticketId/start-work",
+      "/tickets/:ticketId/finish"
+    ]
+  },
+  "detectedInconsistencies": [
+    {
+      "issue": "Priority value format inconsistency",
+      "description": "Frontend sends priority as string ('Low', 'Medium', 'High') but backend likely stores as numeric (1, 2, 3). Gateway schema shows enum as strings.",
+      "affectedEndpoints": ["/tickets (POST)", "/tickets/:ticketId (PATCH)"],
+      "recommendation": "Clarify with backend team if conversion happens in microservice or if both formats are accepted"
+    },
+    {
+      "issue": "Status field meaning varies by context",
+      "description": "User status and Group status both use 0/1 (Inactive/Active), but Ticket status uses 1/2/3 (Open/InProgress/Closed). May cause confusion.",
+      "affectedEndpoints": [
+        "User endpoints",
+        "Group endpoints",
+        "Ticket endpoints"
+      ],
+      "recommendation": "Consider using consistent status naming across entities or documenting clearly"
+    },
+    {
+      "issue": "DELETE method with request body",
+      "description": "The /users/:userId/status endpoint uses DELETE method but requires a request body with status field. This is unusual as DELETE typically has no body.",
+      "affectedEndpoints": ["/users/:userId/status (DELETE)"],
+      "recommendation": "Consider using PATCH method instead, or make status a query parameter"
+    },
+    {
+      "issue": "Shared OpCode for different operations",
+      "description": "Groups add member and remove member both return SGRMB200, making it harder to distinguish operations in logs.",
+      "affectedEndpoints": [
+        "/groups/members (POST)",
+        "/groups/members (DELETE)"
+      ],
+      "recommendation": "Consider using distinct OpCodes like SGRAM200 (add) and SGRRM200 (remove)"
+    },
+    {
+      "issue": "Comments field purpose unclear",
+      "description": "Tickets have both 'description' and 'comments' fields. The distinction and use case for each is not clearly documented.",
+      "affectedEndpoints": ["Ticket endpoints"],
+      "recommendation": "Clarify: description = initial problem statement, comments = additional notes/updates?"
+    }
+  ]
+}

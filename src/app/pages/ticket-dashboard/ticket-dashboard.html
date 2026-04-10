@@ -20,7 +20,7 @@
     </h1>
   </div>
 
-  <!-- Summary Cards -->
+  <!-- Summary Cards — 3 statuses + total + priority alta -->
   <div class="summary-cards">
     <div class="summary-card total">
       <div class="summary-icon">
@@ -31,13 +31,13 @@
         <span class="summary-label">Total</span>
       </div>
     </div>
-    <div class="summary-card pendientes">
+    <div class="summary-card abiertos">
       <div class="summary-icon">
         <i class="pi pi-clock"></i>
       </div>
       <div class="summary-info">
-        <span class="summary-number">{{ pendientes() }}</span>
-        <span class="summary-label">Pendientes</span>
+        <span class="summary-number">{{ abiertos() }}</span>
+        <span class="summary-label">Abiertos</span>
       </div>
     </div>
     <div class="summary-card en-progreso">
@@ -49,22 +49,13 @@
         <span class="summary-label">En progreso</span>
       </div>
     </div>
-    <div class="summary-card en-revision">
-      <div class="summary-icon">
-        <i class="pi pi-eye"></i>
-      </div>
-      <div class="summary-info">
-        <span class="summary-number">{{ enRevision() }}</span>
-        <span class="summary-label">En revision</span>
-      </div>
-    </div>
-    <div class="summary-card finalizados">
+    <div class="summary-card cerrados">
       <div class="summary-icon">
         <i class="pi pi-check-circle"></i>
       </div>
       <div class="summary-info">
-        <span class="summary-number">{{ finalizados() }}</span>
-        <span class="summary-label">Finalizados</span>
+        <span class="summary-number">{{ cerrados() }}</span>
+        <span class="summary-label">Cerrados</span>
       </div>
     </div>
     <div class="summary-card alta-prioridad">
@@ -98,13 +89,13 @@
         </p-iconfield>
       </div>
 
-      <!-- User -->
+      <!-- Assigned user -->
       <div class="filter-field">
-        <label>Usuario</label>
+        <label>Asignado a</label>
         <p-select
-          [options]="userOptions()"
-          [ngModel]="filterUser()"
-          (ngModelChange)="filterUser.set($event)"
+          [options]="assignedOptions()"
+          [ngModel]="filterAssigned()"
+          (ngModelChange)="filterAssigned.set($event)"
           optionLabel="label"
           optionValue="value"
           placeholder="Todos los usuarios"
@@ -160,8 +151,8 @@
       <div class="filter-field">
         <label>Creacion desde</label>
         <p-datepicker
-          [ngModel]="filterFechaCreacionDesde()"
-          (ngModelChange)="filterFechaCreacionDesde.set($event)"
+          [ngModel]="filterCreatedFrom()"
+          (ngModelChange)="filterCreatedFrom.set($event)"
           dateFormat="yy-mm-dd"
           [showIcon]="true"
           placeholder="Desde"
@@ -175,8 +166,8 @@
       <div class="filter-field">
         <label>Creacion hasta</label>
         <p-datepicker
-          [ngModel]="filterFechaCreacionHasta()"
-          (ngModelChange)="filterFechaCreacionHasta.set($event)"
+          [ngModel]="filterCreatedTo()"
+          (ngModelChange)="filterCreatedTo.set($event)"
           dateFormat="yy-mm-dd"
           [showIcon]="true"
           placeholder="Hasta"
@@ -190,8 +181,8 @@
       <div class="filter-field">
         <label>Limite desde</label>
         <p-datepicker
-          [ngModel]="filterFechaLimiteDesde()"
-          (ngModelChange)="filterFechaLimiteDesde.set($event)"
+          [ngModel]="filterDueFrom()"
+          (ngModelChange)="filterDueFrom.set($event)"
           dateFormat="yy-mm-dd"
           [showIcon]="true"
           placeholder="Desde"
@@ -205,8 +196,8 @@
       <div class="filter-field">
         <label>Limite hasta</label>
         <p-datepicker
-          [ngModel]="filterFechaLimiteHasta()"
-          (ngModelChange)="filterFechaLimiteHasta.set($event)"
+          [ngModel]="filterDueTo()"
+          (ngModelChange)="filterDueTo.set($event)"
           dateFormat="yy-mm-dd"
           [showIcon]="true"
           placeholder="Hasta"
@@ -240,62 +231,61 @@
     currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} tickets"
     dataKey="id"
     styleClass="p-datatable-striped"
+    [loading]="loading()"
   >
     <ng-template #header>
       <tr>
-        <th pSortableColumn="id" style="min-width: 5rem">
-          ID <p-sortIcon field="id" />
+        <th pSortableColumn="title" style="min-width: 14rem">
+          Titulo <p-sortIcon field="title" />
         </th>
-        <th pSortableColumn="titulo" style="min-width: 14rem">
-          Titulo <p-sortIcon field="titulo" />
+        <th pSortableColumn="status" style="min-width: 8rem">
+          Estado <p-sortIcon field="status" />
         </th>
-        <th pSortableColumn="estado" style="min-width: 8rem">
-          Estado <p-sortIcon field="estado" />
+        <th pSortableColumn="assignedUserName" style="min-width: 10rem">
+          Asignado a <p-sortIcon field="assignedUserName" />
         </th>
-        <th pSortableColumn="asignadoA" style="min-width: 10rem">
-          Asignado a <p-sortIcon field="asignadoA" />
+        <th pSortableColumn="priority" style="min-width: 8rem">
+          Prioridad <p-sortIcon field="priority" />
         </th>
-        <th pSortableColumn="prioridad" style="min-width: 8rem">
-          Prioridad <p-sortIcon field="prioridad" />
+        <th pSortableColumn="groupName" style="min-width: 9rem">
+          Grupo <p-sortIcon field="groupName" />
         </th>
-        <th pSortableColumn="fechaCreacion" style="min-width: 9rem">
-          Creacion <p-sortIcon field="fechaCreacion" />
+        <th pSortableColumn="createdAt" style="min-width: 9rem">
+          Creacion <p-sortIcon field="createdAt" />
         </th>
-        <th pSortableColumn="fechaLimite" style="min-width: 9rem">
-          Limite <p-sortIcon field="fechaLimite" />
+        <th pSortableColumn="dueDate" style="min-width: 9rem">
+          Limite <p-sortIcon field="dueDate" />
         </th>
-        <th style="min-width: 5rem">Grupo</th>
       </tr>
     </ng-template>
 
     <ng-template #body let-ticket>
       <tr>
-        <td>{{ ticket.id }}</td>
         <td>
-          <span class="ticket-title-cell">{{ ticket.titulo }}</span>
+          <span class="ticket-title-cell">{{ ticket.title }}</span>
         </td>
         <td>
           <p-tag
-            [value]="ticket.estado"
-            [severity]="getEstadoSeverity(ticket.estado)"
+            [value]="getStatusLabel(ticket.status)"
+            [severity]="getStatusSeverity(ticket.status)"
           />
         </td>
-        <td>{{ ticket.asignadoA }}</td>
+        <td>{{ ticket.assignedUserName ?? 'Sin asignar' }}</td>
         <td>
           <p-tag
-            [value]="ticket.prioridad"
-            [severity]="getPrioridadSeverity(ticket.prioridad)"
+            [value]="getPriorityLabel(ticket.priority)"
+            [severity]="getPrioritySeverity(ticket.priority)"
           />
         </td>
-        <td>{{ ticket.fechaCreacion }}</td>
-        <td>{{ ticket.fechaLimite }}</td>
-        <td>{{ ticket.groupId }}</td>
+        <td>{{ ticket.groupName }}</td>
+        <td>{{ formatDateDisplay(ticket.createdAt) }}</td>
+        <td>{{ formatDateDisplay(ticket.dueDate) }}</td>
       </tr>
     </ng-template>
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="8" class="empty-message">
+        <td colspan="7" class="empty-message">
           <i class="pi pi-inbox empty-icon"></i>
           <span>No se encontraron tickets con los filtros seleccionados</span>
         </td>

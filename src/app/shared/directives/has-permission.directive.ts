@@ -2,6 +2,13 @@ import { Directive, Input, TemplateRef, ViewContainerRef, inject, effect, signal
 import { AuthService } from '../../core/services/auth.service';
 import { PermissionModule, PermissionAction } from '../../core/models/permission';
 
+/**
+ * Directiva estructural que ELIMINA del DOM los elementos
+ * para los cuales el usuario no tiene permisos.
+ * Formato de uso: *appHasPermission="['groups', 'view']"
+ *
+ * Usa el AuthService.hasPermission() que traduce (module, action) al formato backend.
+ */
 @Directive({
   selector: '[appHasPermission]',
   standalone: true,

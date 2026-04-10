@@ -39,7 +39,7 @@ export const routes: Routes = [
   },
   {
     path: 'groups/:groupId/users',
-    canActivate: [authGuard, permissionGuard('users', 'view')],
+    canActivate: [authGuard, permissionGuard('groups', 'view')],
     loadChildren: () =>
       import('./pages/group-users/group-users.routes').then(m => m.groupUsersRoutes),
   },

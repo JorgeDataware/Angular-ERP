@@ -19,7 +19,7 @@
         <i class="pi pi-user"></i>
       </div>
       <div class="user-details">
-        <span class="user-name">{{ currentUser()!.fullName }}</span>
+        <span class="user-name">{{ userFullName() }}</span>
       </div>
     </div>
   }
@@ -52,11 +52,11 @@
     }
     <a
       class="menu-item logout-item"
-      routerLink="/home/landing"
       (click)="logout()"
       pRipple
       [pTooltip]="collapsed() ? 'Cerrar sesion' : ''"
       tooltipPosition="right"
+      style="cursor: pointer"
     >
       <i class="pi pi-sign-out menu-icon"></i>
       @if (!collapsed()) {

@@ -1,0 +1,259 @@
+{
+  "module": "auth",
+  "endpoints": [
+    {
+      "id": "auth-login",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "auth",
+      "controllerName": "authRoutes",
+      "gatewayEndpoint": "/auth/login",
+      "internalEndpoint": "/auth/login",
+      "httpMethod": "POST",
+      "summary": "Login",
+      "description": "Authenticates a user through the Users service.",
+      "requiresAuth": false,
+      "authType": "none",
+      "requiredPermissions": [],
+      "permissionNotes": "No authentication or permissions required for login.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User email address"
+          },
+          "password": {
+            "type": "string",
+            "description": "User password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "email": "jorge@test.com",
+        "password": "password123"
+      },
+      "fieldsRequired": ["email", "password"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "email must be a valid email format",
+        "password is required but no specific format validation is shown in gateway"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLG200",
+          "message": "Login successful.",
+          "whenItHappens": "When credentials are valid and user is authenticated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLG200",
+            "message": "Login successful.",
+            "data": [
+              {
+                "token": "eyJ...",
+                "expiresAt": "2026-04-20T18:00:00.000Z",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid credentials.",
+          "whenItHappens": "When email or password is incorrect",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid credentials.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies request to Users microservice at /api/User/login",
+        "Returns JWT token with expiration date and user permissions",
+        "Token should be stored by frontend for subsequent authenticated requests",
+        "Permissions array indicates what actions the user can perform"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": [],
+        "microserviceEndpoint": "/api/User/login"
+      },
+      "frontendNotes": [
+        "Store the returned token in localStorage or secure cookie",
+        "Store permissions array to control UI visibility",
+        "Use token in Authorization header as 'Bearer {token}' for subsequent requests",
+        "Also supported: send token in 'jwt' cookie",
+        "Handle 401 error with user-friendly message about invalid credentials",
+        "Redirect to home/dashboard after successful login"
+      ],
+      "inferenceNotes": [
+        "Response structure follows standard: {statusCode, intOpCode, message, data[]}",
+        "Data is always an array, even for single object responses",
+        "Actual authentication logic is in Users microservice",
+        "OpCode SUSLG200 = Success User Service Login 200",
+        "OpCode EUSAU401 = Error User Service Authentication Unauthorized 401"
+      ]
+    },
+    {
+      "id": "auth-logout",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "auth",
+      "controllerName": "authRoutes",
+      "gatewayEndpoint": "/auth/logout",
+      "internalEndpoint": "/auth/logout",
+      "httpMethod": "POST",
+      "summary": "Logout",
+      "description": "Logs out the current authenticated user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires valid JWT token but no specific permissions. Authentication is verified via app.authenticate() preHandler.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header. JWT token can be sent via cookie."
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [
+        "Valid JWT token required in Authorization header or jwt cookie",
+        "Token must be signed with JWT_SECRET_KEY",
+        "Token must have valid issuer and audience"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLO200",
+          "message": "Logout successful.",
+          "whenItHappens": "When user is authenticated and logout is processed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLO200",
+            "message": "Logout successful.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided in Authorization header or jwt cookie",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "When token is malformed, expired, or signature verification fails",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies request to Users microservice at /api/User/logout",
+        "Token validation happens in gateway before proxying",
+        "Actual logout logic (token invalidation) happens in Users microservice",
+        "Frontend should clear stored token after successful logout"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/logout"
+      },
+      "frontendNotes": [
+        "Clear stored token from localStorage/cookies after successful logout",
+        "Clear stored user permissions",
+        "Redirect to login page after logout",
+        "Handle 401 errors by redirecting to login",
+        "No request body needed for this endpoint"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSLO200 = Success User Service Logout 200",
+        "OpCode EGWAU401 = Error Gateway Authentication Unauthorized 401",
+        "Token can be sent via Authorization header OR jwt cookie",
+        "Gateway validates token before proxying to microservice"
+      ]
+    }
+  ]
+}

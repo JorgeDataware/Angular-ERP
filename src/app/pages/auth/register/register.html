@@ -15,38 +15,70 @@
 
     <form (ngSubmit)="onRegister()" class="register-form">
       <div class="field">
-        <label for="username">Usuario *</label>
+        <label for="userName">Usuario *</label>
         <input
-          id="username"
+          id="userName"
           type="text"
           pInputText
           placeholder="Nombre de usuario"
-          [ngModel]="username()"
-          (ngModelChange)="username.set($event)"
-          name="username"
+          [ngModel]="userName()"
+          (ngModelChange)="userName.set($event)"
+          name="userName"
           class="w-full"
           required
         />
-        @if (usernameError()) {
-          <span class="validation-error">{{ usernameError() }}</span>
+        @if (userNameError()) {
+          <span class="validation-error">{{ userNameError() }}</span>
         }
       </div>
 
       <div class="field">
-        <label for="fullName">Nombre completo *</label>
+        <label for="firstName">Nombre *</label>
         <input
-          id="fullName"
+          id="firstName"
           type="text"
           pInputText
-          placeholder="Tu nombre completo"
-          [ngModel]="fullName()"
-          (ngModelChange)="fullName.set($event)"
-          name="fullName"
+          placeholder="Tu nombre"
+          [ngModel]="firstName()"
+          (ngModelChange)="firstName.set($event)"
+          name="firstName"
           class="w-full"
           required
         />
-        @if (fullNameError()) {
-          <span class="validation-error">{{ fullNameError() }}</span>
+        @if (firstNameError()) {
+          <span class="validation-error">{{ firstNameError() }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="middleName">Segundo nombre</label>
+        <input
+          id="middleName"
+          type="text"
+          pInputText
+          placeholder="Segundo nombre (opcional)"
+          [ngModel]="middleName()"
+          (ngModelChange)="middleName.set($event)"
+          name="middleName"
+          class="w-full"
+        />
+      </div>
+
+      <div class="field">
+        <label for="lastName">Apellido *</label>
+        <input
+          id="lastName"
+          type="text"
+          pInputText
+          placeholder="Tu apellido"
+          [ngModel]="lastName()"
+          (ngModelChange)="lastName.set($event)"
+          name="lastName"
+          class="w-full"
+          required
+        />
+        @if (lastNameError()) {
+          <span class="validation-error">{{ lastNameError() }}</span>
         }
       </div>
 
@@ -66,40 +98,6 @@
         @if (emailError()) {
           <span class="validation-error">{{ emailError() }}</span>
         }
-      </div>
-
-      <div class="field">
-        <label for="phone">Telefono *</label>
-        <input
-          id="phone"
-          type="text"
-          pInputText
-          placeholder="1234567890"
-          [ngModel]="phone()"
-          (ngModelChange)="phone.set($event)"
-          name="phone"
-          class="w-full"
-          maxlength="10"
-          required
-        />
-        @if (phoneError()) {
-          <span class="validation-error">{{ phoneError() }}</span>
-        }
-      </div>
-
-      <div class="field">
-        <label for="address">Direccion *</label>
-        <input
-          id="address"
-          type="text"
-          pInputText
-          placeholder="Calle, numero, colonia, ciudad"
-          [ngModel]="address()"
-          (ngModelChange)="address.set($event)"
-          name="address"
-          class="w-full"
-          required
-        />
       </div>
 
       <div class="field">
@@ -180,7 +178,8 @@
         label="Crear cuenta"
         icon="pi pi-user-plus"
         styleClass="w-full"
-        [disabled]="!isFormValid()"
+        [disabled]="!isFormValid() || loading()"
+        [loading]="loading()"
       />
 
       @if (!isFormValid()) {

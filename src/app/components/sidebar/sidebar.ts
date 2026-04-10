@@ -1,5 +1,5 @@
 import { Component, output, signal, computed, inject } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { RippleModule } from 'primeng/ripple';
 import { TooltipModule } from 'primeng/tooltip';
@@ -21,6 +21,7 @@ interface MenuItem {
 })
 export class Sidebar {
   private authService = inject(AuthService);
+  private router = inject(Router);
 
   collapsed = signal(false);
   collapsedChange = output<boolean>();
@@ -28,6 +29,7 @@ export class Sidebar {
   appVersion = 'v0.0.3';
 
   currentUser = this.authService.currentUser;
+  userFullName = this.authService.fullName;
 
   private allMenuItems: MenuItem[] = [
     { label: 'Perfil', icon: 'pi pi-user', route: '/profile' },
@@ -50,6 +52,14 @@ export class Sidebar {
   }
 
   logout(): void {
-    this.authService.logout();
+    this.authService.logout().subscribe({
+      next: () => {
+        this.router.navigate(['/auth/login']);
+      },
+      error: () => {
+        // Incluso si falla, la sesión local ya fue limpiada por el servicio
+        this.router.navigate(['/auth/login']);
+      },
+    });
   }
 }

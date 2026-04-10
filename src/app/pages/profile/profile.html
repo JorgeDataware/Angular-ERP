@@ -27,6 +27,13 @@
             (onClick)="startEdit()"
           />
           <p-button
+            label="Cambiar contrasena"
+            icon="pi pi-lock"
+            severity="secondary"
+            [outlined]="true"
+            (onClick)="openPasswordDialog()"
+          />
+          <p-button
             label="Desactivar cuenta"
             icon="pi pi-trash"
             severity="danger"
@@ -39,6 +46,7 @@
             icon="pi pi-check"
             severity="success"
             [disabled]="!isFormValid()"
+            [loading]="saving()"
             (onClick)="saveProfile()"
           />
           <p-button
@@ -46,6 +54,7 @@
             icon="pi pi-times"
             severity="secondary"
             [outlined]="true"
+            [disabled]="saving()"
             (onClick)="cancelEdit()"
           />
         }
@@ -64,37 +73,75 @@
 
       <!-- Usuario -->
       <div class="field">
-        <label for="username">Usuario</label>
+        <label for="userName">Usuario</label>
         <input
-          id="username"
+          id="userName"
           type="text"
           pInputText
-          [ngModel]="username()"
-          (ngModelChange)="username.set($event)"
-          name="username"
+          [ngModel]="userName()"
+          (ngModelChange)="userName.set($event)"
+          name="userName"
           class="w-full"
           [readonly]="!editing()"
+          [disabled]="saving()"
         />
-        @if (usernameError()) {
-          <span class="validation-error">{{ usernameError() }}</span>
+        @if (userNameError()) {
+          <span class="validation-error">{{ userNameError() }}</span>
         }
       </div>
 
-      <!-- Nombre completo -->
+      <!-- Nombre -->
       <div class="field">
-        <label for="fullName">Nombre completo</label>
+        <label for="firstName">Nombre</label>
         <input
-          id="fullName"
+          id="firstName"
           type="text"
           pInputText
-          [ngModel]="fullName()"
-          (ngModelChange)="fullName.set($event)"
-          name="fullName"
+          [ngModel]="firstName()"
+          (ngModelChange)="firstName.set($event)"
+          name="firstName"
           class="w-full"
           [readonly]="!editing()"
+          [disabled]="saving()"
         />
-        @if (fullNameError()) {
-          <span class="validation-error">{{ fullNameError() }}</span>
+        @if (firstNameError()) {
+          <span class="validation-error">{{ firstNameError() }}</span>
+        }
+      </div>
+
+      <!-- Segundo nombre -->
+      <div class="field">
+        <label for="middleName">Segundo nombre</label>
+        <input
+          id="middleName"
+          type="text"
+          pInputText
+          [ngModel]="middleName()"
+          (ngModelChange)="middleName.set($event)"
+          name="middleName"
+          class="w-full"
+          [readonly]="!editing()"
+          [disabled]="saving()"
+          placeholder="Opcional"
+        />
+      </div>
+
+      <!-- Apellido -->
+      <div class="field">
+        <label for="lastName">Apellido</label>
+        <input
+          id="lastName"
+          type="text"
+          pInputText
+          [ngModel]="lastName()"
+          (ngModelChange)="lastName.set($event)"
+          name="lastName"
+          class="w-full"
+          [readonly]="!editing()"
+          [disabled]="saving()"
+        />
+        @if (lastNameError()) {
+          <span class="validation-error">{{ lastNameError() }}</span>
         }
       </div>
 
@@ -110,125 +157,11 @@
           name="email"
           class="w-full"
           [readonly]="!editing()"
+          [disabled]="saving()"
         />
         @if (emailError()) {
           <span class="validation-error">{{ emailError() }}</span>
         }
-      </div>
-
-      <!-- Telefono -->
-      <div class="field">
-        <label for="phone">Telefono</label>
-        <input
-          id="phone"
-          type="text"
-          pInputText
-          [ngModel]="phone()"
-          (ngModelChange)="phone.set($event)"
-          name="phone"
-          class="w-full"
-          maxlength="10"
-          [readonly]="!editing()"
-        />
-        @if (phoneError()) {
-          <span class="validation-error">{{ phoneError() }}</span>
-        }
-      </div>
-
-      <!-- Direccion -->
-      <div class="field">
-        <label for="address">Direccion</label>
-        <input
-          id="address"
-          type="text"
-          pInputText
-          [ngModel]="address()"
-          (ngModelChange)="address.set($event)"
-          name="address"
-          class="w-full"
-          [readonly]="!editing()"
-        />
-        @if (addressError()) {
-          <span class="validation-error">{{ addressError() }}</span>
-        }
-      </div>
-
-      <!-- Contrasena -->
-      <div class="field">
-        <label for="password">Contrasena</label>
-        <p-password
-          id="password"
-          [ngModel]="password()"
-          (ngModelChange)="password.set($event)"
-          name="password"
-          [toggleMask]="true"
-          [feedback]="false"
-          [disabled]="!editing()"
-          styleClass="w-full"
-          inputStyleClass="w-full"
-        />
-        @if (passwordErrors().length > 0) {
-          <div class="password-requirements">
-            @for (error of passwordErrors(); track error) {
-              <span class="validation-error">{{ error }}</span>
-            }
-          </div>
-        }
-        @if (editing()) {
-          <div class="password-hint">
-            <small>
-              <i class="pi pi-info-circle"></i>
-              Minimo 10 caracteres, sin espacios, con simbolos especiales (!@#$%^&*)
-            </small>
-          </div>
-        }
-      </div>
-
-      <!-- Confirmar contrasena -->
-      <div class="field">
-        <label for="confirmPassword">Confirmar contrasena</label>
-        <p-password
-          id="confirmPassword"
-          [ngModel]="confirmPassword()"
-          (ngModelChange)="confirmPassword.set($event)"
-          name="confirmPassword"
-          [toggleMask]="true"
-          [feedback]="false"
-          [disabled]="!editing()"
-          styleClass="w-full"
-          inputStyleClass="w-full"
-        />
-        @if (passwordsDontMatch()) {
-          <span class="validation-error">Las contrasenas no coinciden</span>
-        }
-        @if (editing() && passwordsMatch()) {
-          <span class="validation-success">Las contrasenas coinciden</span>
-        }
-      </div>
-
-      <!-- Checkboxes -->
-      <div class="field-checkbox">
-        <p-checkbox
-          [ngModel]="isAdult()"
-          (ngModelChange)="isAdult.set($event)"
-          name="isAdult"
-          [binary]="true"
-          inputId="isAdult"
-          [disabled]="!editing()"
-        />
-        <label for="isAdult" class="checkbox-label">Acepto que soy mayor de edad</label>
-      </div>
-
-      <div class="field-checkbox">
-        <p-checkbox
-          [ngModel]="acceptTerms()"
-          (ngModelChange)="acceptTerms.set($event)"
-          name="acceptTerms"
-          [binary]="true"
-          inputId="acceptTerms"
-          [disabled]="!editing()"
-        />
-        <label for="acceptTerms" class="checkbox-label">Acepto los terminos y condiciones</label>
       </div>
 
       <!-- Form hint when editing -->
@@ -263,22 +196,22 @@
         dataKey="id"
         styleClass="p-datatable-striped"
       >
-        <ng-template #header>
+         <ng-template #header>
           <tr>
             <th pSortableColumn="id" style="min-width: 4rem">
               ID <p-sortIcon field="id" />
             </th>
-            <th pSortableColumn="titulo" style="min-width: 12rem">
-              Titulo <p-sortIcon field="titulo" />
+            <th pSortableColumn="title" style="min-width: 12rem">
+              Titulo <p-sortIcon field="title" />
             </th>
-            <th pSortableColumn="estado" style="min-width: 8rem">
-              Estado <p-sortIcon field="estado" />
+            <th pSortableColumn="status" style="min-width: 8rem">
+              Estado <p-sortIcon field="status" />
             </th>
-            <th pSortableColumn="prioridad" style="min-width: 7rem">
-              Prioridad <p-sortIcon field="prioridad" />
+            <th pSortableColumn="priority" style="min-width: 7rem">
+              Prioridad <p-sortIcon field="priority" />
             </th>
-            <th pSortableColumn="fechaLimite" style="min-width: 8rem">
-              Limite <p-sortIcon field="fechaLimite" />
+            <th pSortableColumn="dueDate" style="min-width: 8rem">
+              Limite <p-sortIcon field="dueDate" />
             </th>
           </tr>
         </ng-template>
@@ -286,21 +219,21 @@
           <tr>
             <td>{{ ticket.id }}</td>
             <td>
-              <span class="ticket-title-cell">{{ ticket.titulo }}</span>
+              <span class="ticket-title-cell">{{ ticket.title }}</span>
             </td>
             <td>
               <p-tag
-                [value]="ticket.estado"
-                [severity]="getEstadoSeverity(ticket.estado)"
+                [value]="getStatusLabel(ticket.status)"
+                [severity]="getStatusSeverity(ticket.status)"
               />
             </td>
             <td>
               <p-tag
-                [value]="ticket.prioridad"
-                [severity]="getPrioridadSeverity(ticket.prioridad)"
+                [value]="getPriorityLabel(ticket.priority)"
+                [severity]="getPrioritySeverity(ticket.priority)"
               />
             </td>
-            <td>{{ ticket.fechaLimite }}</td>
+            <td>{{ ticket.dueDate ?? '-' }}</td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
@@ -314,3 +247,98 @@
     }
   </div>
 </div>
+
+<!-- Password Change Dialog -->
+<p-dialog
+  header="Cambiar Contrasena"
+  [(visible)]="passwordDialogVisible"
+  [modal]="true"
+  [style]="{ width: '30rem' }"
+  [draggable]="false"
+  [resizable]="false"
+  (onHide)="hidePasswordDialog()"
+>
+  <div class="password-dialog-content">
+    <!-- Current Password -->
+    <div class="field">
+      <label for="currentPassword">Contrasena actual</label>
+      <p-password
+        id="currentPassword"
+        [ngModel]="currentPassword()"
+        (ngModelChange)="currentPassword.set($event)"
+        [toggleMask]="true"
+        [feedback]="false"
+        [disabled]="changingPassword()"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+    </div>
+
+    <!-- New Password -->
+    <div class="field">
+      <label for="newPassword">Nueva contrasena</label>
+      <p-password
+        id="newPassword"
+        [ngModel]="newPassword()"
+        (ngModelChange)="newPassword.set($event)"
+        [toggleMask]="true"
+        [feedback]="false"
+        [disabled]="changingPassword()"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+      @if (newPasswordErrors().length > 0) {
+        <div class="password-requirements">
+          @for (error of newPasswordErrors(); track error) {
+            <span class="validation-error">{{ error }}</span>
+          }
+        </div>
+      }
+      <div class="password-hint">
+        <small>
+          <i class="pi pi-info-circle"></i>
+          Minimo 10 caracteres, sin espacios, con simbolos especiales (!@#$%^&*)
+        </small>
+      </div>
+    </div>
+
+    <!-- Confirm New Password -->
+    <div class="field">
+      <label for="confirmNewPassword">Confirmar nueva contrasena</label>
+      <p-password
+        id="confirmNewPassword"
+        [ngModel]="confirmNewPassword()"
+        (ngModelChange)="confirmNewPassword.set($event)"
+        [toggleMask]="true"
+        [feedback]="false"
+        [disabled]="changingPassword()"
+        styleClass="w-full"
+        inputStyleClass="w-full"
+      />
+      @if (passwordsDontMatch()) {
+        <span class="validation-error">Las contrasenas no coinciden</span>
+      }
+      @if (passwordsMatch()) {
+        <span class="validation-success">Las contrasenas coinciden</span>
+      }
+    </div>
+  </div>
+
+  <ng-template #footer>
+    <p-button
+      label="Cancelar"
+      icon="pi pi-times"
+      severity="secondary"
+      [text]="true"
+      [disabled]="changingPassword()"
+      (onClick)="hidePasswordDialog()"
+    />
+    <p-button
+      label="Cambiar"
+      icon="pi pi-check"
+      [disabled]="!isPasswordFormValid()"
+      [loading]="changingPassword()"
+      (onClick)="changePassword()"
+    />
+  </ng-template>
+</p-dialog>

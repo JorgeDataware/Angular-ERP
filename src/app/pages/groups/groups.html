@@ -12,6 +12,7 @@
         label="Nuevo Grupo"
         icon="pi pi-plus"
         severity="primary"
+        [disabled]="saving()"
         (onClick)="openNew()"
       />
     </ng-template>
@@ -34,32 +35,29 @@
     [paginator]="true"
     [rows]="5"
     [rowsPerPageOptions]="[5, 10, 25]"
-    [tableStyle]="{ 'min-width': '70rem' }"
+    [tableStyle]="{ 'min-width': '60rem' }"
     [rowHover]="true"
     [showCurrentPageReport]="true"
     currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} grupos"
-    [globalFilterFields]="['nombre', 'autor', 'nivel', 'descripcion']"
+    [globalFilterFields]="['name', 'owner', 'description']"
+    [loading]="loading()"
     dataKey="id"
     styleClass="p-datatable-striped"
   >
     <ng-template #header>
       <tr>
-        <th pSortableColumn="nivel" style="min-width: 8rem">
-          Nivel <p-sortIcon field="nivel" />
+        <th pSortableColumn="name" style="min-width: 12rem">
+          Nombre <p-sortIcon field="name" />
         </th>
-        <th pSortableColumn="autor" style="min-width: 10rem">
-          Autor <p-sortIcon field="autor" />
-        </th>
-        <th pSortableColumn="nombre" style="min-width: 12rem">
-          Nombre <p-sortIcon field="nombre" />
-        </th>
-        <th pSortableColumn="integrantes" style="min-width: 8rem">
-          Integrantes <p-sortIcon field="integrantes" />
-        </th>
-        <th pSortableColumn="tickets" style="min-width: 8rem">
-          Tickets <p-sortIcon field="tickets" />
+        <th pSortableColumn="owner" style="min-width: 10rem">
+          Propietario <p-sortIcon field="owner" />
         </th>
         <th style="min-width: 16rem">Descripcion</th>
+        <th pSortableColumn="status" style="min-width: 8rem">
+          Estado <p-sortIcon field="status" />
+        </th>
+        <th style="min-width: 8rem; text-align: center">Miembros</th>
+        <th style="min-width: 8rem; text-align: center">Tickets</th>
         <th style="min-width: 10rem; text-align: center">Acciones</th>
       </tr>
     </ng-template>
@@ -67,29 +65,27 @@
     <ng-template #body let-group>
       <tr>
         <td>
+          <span class="group-name">{{ group.name }}</span>
+        </td>
+        <td>{{ group.owner }}</td>
+        <td>
+          <span class="description-cell">{{ group.description }}</span>
+        </td>
+        <td>
           <p-tag
-            [value]="group.nivel"
-            [severity]="getNivelSeverity(group.nivel)"
+            [value]="getStatusLabel(group.status)"
+            [severity]="getStatusSeverity(group.status)"
           />
         </td>
-        <td>{{ group.autor }}</td>
-        <td>
-          <span class="group-name">{{ group.nombre }}</span>
-        </td>
-        <td>
-          <span class="badge-count badge-clickable" (click)="goToUsers(group)" pTooltip="Ver integrantes" tooltipPosition="top">
+        <td style="text-align: center">
+          <span class="badge-count badge-clickable" (click)="goToUsers(group)" pTooltip="Ver miembros" tooltipPosition="top">
             <i class="pi pi-users"></i>
-            {{ group.integrantes }}
           </span>
         </td>
-        <td>
+        <td style="text-align: center">
           <span class="badge-count badge-clickable" (click)="goToTicketDashboard(group)" pTooltip="Ver dashboard de tickets" tooltipPosition="top">
             <i class="pi pi-ticket"></i>
-            {{ group.tickets }}
           </span>
-        </td>
-        <td>
-          <span class="description-cell">{{ group.descripcion }}</span>
         </td>
         <td class="actions-cell">
           <p-button
@@ -104,13 +100,13 @@
           />
           <p-button
             *appHasPermission="['groups', 'delete']"
-            icon="pi pi-trash"
+            icon="pi pi-ban"
             [rounded]="true"
             severity="danger"
             [text]="true"
-            pTooltip="Eliminar"
+            pTooltip="Desactivar"
             tooltipPosition="top"
-            (onClick)="confirmDelete(group)"
+            (onClick)="confirmDeactivate(group)"
           />
         </td>
       </tr>
@@ -132,112 +128,46 @@
   [header]="dialogTitle()"
   [(visible)]="dialogVisible"
   [modal]="true"
-  [style]="{ width: '40rem' }"
+  [style]="{ width: '35rem' }"
   [draggable]="false"
   [resizable]="false"
   (onHide)="hideDialog()"
   styleClass="groups-dialog"
 >
   <div class="dialog-content">
-    <div class="form-grid">
+    <div class="form-grid form-grid-single">
       <!-- Nombre -->
       <div class="field">
-        <label for="nombre">Nombre <span class="required">*</span></label>
+        <label for="name">Nombre <span class="required">*</span></label>
         <input
           pInputText
-          id="nombre"
-          [ngModel]="editNombre()"
-          (ngModelChange)="editNombre.set($event)"
+          id="name"
+          [ngModel]="editName()"
+          (ngModelChange)="editName.set($event)"
           placeholder="Nombre del grupo"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editNombre().trim() }"
+          [disabled]="saving()"
+          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editName().trim() }"
         />
-        @if (submitted() && !editNombre().trim()) {
+        @if (submitted() && !editName().trim()) {
           <small class="field-error">El nombre es requerido.</small>
         }
       </div>
 
-      <!-- Autor -->
-      <div class="field">
-        <label for="autor">Autor <span class="required">*</span></label>
-        <input
-          pInputText
-          id="autor"
-          [ngModel]="editAutor()"
-          (ngModelChange)="editAutor.set($event)"
-          placeholder="Autor del grupo"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editAutor().trim() }"
-        />
-        @if (submitted() && !editAutor().trim()) {
-          <small class="field-error">El autor es requerido.</small>
-        }
-      </div>
-
-      <!-- Nivel -->
-      <div class="field">
-        <label for="nivel">Nivel <span class="required">*</span></label>
-        <input
-          pInputText
-          id="nivel"
-          [ngModel]="editNivel()"
-          (ngModelChange)="editNivel.set($event)"
-          placeholder="Alto, Medio o Bajo"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editNivel().trim() }"
-        />
-        @if (submitted() && !editNivel().trim()) {
-          <small class="field-error">El nivel es requerido.</small>
-        }
-      </div>
-
-      <!-- Integrantes -->
-      <div class="field">
-        <label for="integrantes">Integrantes <span class="required">*</span></label>
-        <p-inputnumber
-          id="integrantes"
-          [ngModel]="editIntegrantes()"
-          (ngModelChange)="editIntegrantes.set($event)"
-          [min]="0"
-          placeholder="Cantidad de integrantes"
-          inputStyleClass="w-full"
-          styleClass="w-full"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && editIntegrantes() === null }"
-        />
-        @if (submitted() && editIntegrantes() === null) {
-          <small class="field-error">Los integrantes son requeridos.</small>
-        }
-      </div>
-
-      <!-- Tickets -->
-      <div class="field">
-        <label for="tickets">Tickets <span class="required">*</span></label>
-        <p-inputnumber
-          id="tickets"
-          [ngModel]="editTickets()"
-          (ngModelChange)="editTickets.set($event)"
-          [min]="0"
-          placeholder="Cantidad de tickets"
-          inputStyleClass="w-full"
-          styleClass="w-full"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && editTickets() === null }"
-        />
-        @if (submitted() && editTickets() === null) {
-          <small class="field-error">Los tickets son requeridos.</small>
-        }
-      </div>
-
       <!-- Descripcion -->
-      <div class="field field-full">
-        <label for="descripcion">Descripcion <span class="required">*</span></label>
+      <div class="field">
+        <label for="description">Descripcion <span class="required">*</span></label>
         <textarea
           pTextarea
-          id="descripcion"
-          [ngModel]="editDescripcion()"
-          (ngModelChange)="editDescripcion.set($event)"
+          id="description"
+          [ngModel]="editDescription()"
+          (ngModelChange)="editDescription.set($event)"
           placeholder="Descripcion del grupo"
           [rows]="3"
           [autoResize]="true"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editDescripcion().trim() }"
+          [disabled]="saving()"
+          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editDescription().trim() }"
         ></textarea>
-        @if (submitted() && !editDescripcion().trim()) {
+        @if (submitted() && !editDescription().trim()) {
           <small class="field-error">La descripcion es requerida.</small>
         }
       </div>
@@ -250,11 +180,13 @@
       icon="pi pi-times"
       severity="secondary"
       [text]="true"
+      [disabled]="saving()"
       (onClick)="hideDialog()"
     />
     <p-button
       label="Guardar"
       icon="pi pi-check"
+      [loading]="saving()"
       (onClick)="saveGroup()"
     />
   </ng-template>

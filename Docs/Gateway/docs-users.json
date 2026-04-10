@@ -1,0 +1,1268 @@
+{
+  "module": "users",
+  "endpoints": [
+    {
+      "id": "users-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users",
+      "internalEndpoint": "/users",
+      "httpMethod": "GET",
+      "summary": "Get users",
+      "description": "Retrieves the list of users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission. Validated in gateway via app.requirePermission().",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "Users retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "Users retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user is authenticated but doesn't have canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/GetUsers",
+        "Returns all users in the system",
+        "Each user includes their permissions array",
+        "middleName can be null"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/GetUsers"
+      },
+      "frontendNotes": [
+        "Use this endpoint to populate users list/table",
+        "Display firstName, middleName, lastName, email, userName",
+        "permissions array useful for showing user roles/capabilities",
+        "Handle middleName as optional (can be null)",
+        "Show 403 error when user lacks permission to view users list"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSRD200 = Success User Service Read 200",
+        "Returns array of user objects",
+        "Each user has permissions array"
+      ]
+    },
+    {
+      "id": "users-get-me",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/me",
+      "internalEndpoint": "/users/me",
+      "httpMethod": "GET",
+      "summary": "Get authenticated user",
+      "description": "Retrieves the currently authenticated user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication but no specific permissions. Any authenticated user can retrieve their own data.",
+      "ownershipRules": [
+        "User can only retrieve their own data based on JWT token"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSME200",
+          "message": "Authenticated user retrieved successfully.",
+          "whenItHappens": "When user is authenticated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSME200",
+            "message": "Authenticated user retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "When token is invalid, expired, or malformed",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/Me",
+        "Returns authenticated user's data based on JWT userId claim",
+        "Does not return permissions array (unlike get-all endpoint)",
+        "Useful for profile display"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/Me"
+      },
+      "frontendNotes": [
+        "Use this to display current user profile",
+        "Call after login to get user details",
+        "Does NOT include permissions (use login response for permissions)",
+        "Useful for profile page, navbar user display",
+        "Handle 401 by redirecting to login"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSME200 = Success User Service Me 200",
+        "Returns single user in array",
+        "User ID extracted from JWT token"
+      ]
+    },
+    {
+      "id": "users-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId",
+      "internalEndpoint": "/users/:userId",
+      "httpMethod": "GET",
+      "summary": "Get user by id",
+      "description": "Retrieves a specific user by id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["userId must be a valid UUID string"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "User retrieved successfully.",
+          "whenItHappens": "When user exists and requester has canRead_Users permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "User retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001",
+                "userName": "admin",
+                "firstName": "Jorge",
+                "middleName": "Luis",
+                "lastName": "Pérez",
+                "email": "jorge@test.com",
+                "permissions": [
+                  "canRead_Users",
+                  "canRead_Groups",
+                  "canRead_Tickets"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist in database",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/GetUserById/{userId}",
+        "Returns specific user with permissions array",
+        "Useful for user detail view"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/GetUserById/{userId}"
+      },
+      "frontendNotes": [
+        "Use for user detail modal/page",
+        "Display full user info including permissions",
+        "Handle 404 with user-friendly 'User not found' message",
+        "Permissions array shows what the user can do in the system"
+      ],
+      "inferenceNotes": [
+        "OpCode EUSNF404 = Error User Service Not Found 404",
+        "Returns single user in array format"
+      ]
+    },
+    {
+      "id": "users-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users",
+      "internalEndpoint": "/users",
+      "httpMethod": "POST",
+      "summary": "Create user",
+      "description": "Creates a new user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Users"],
+      "permissionNotes": "Requires canCreate_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["userName", "firstName", "lastName", "email", "password"],
+        "properties": {
+          "userName": {
+            "type": "string",
+            "description": "Username for login"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User's first name"
+          },
+          "middleName": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's middle name (optional)"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User's last name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address (must be unique)"
+          },
+          "password": {
+            "type": "string",
+            "description": "User's password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "userName": "jdoe",
+        "firstName": "John",
+        "middleName": "Michael",
+        "lastName": "Doe",
+        "email": "john.doe@test.com",
+        "password": "SecurePass123"
+      },
+      "fieldsRequired": [
+        "userName",
+        "firstName",
+        "lastName",
+        "email",
+        "password"
+      ],
+      "fieldsOptional": ["middleName"],
+      "validationRules": [
+        "email must be valid email format",
+        "email must be unique in system",
+        "all required fields must be provided"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "SUSCR201",
+          "message": "User created successfully.",
+          "whenItHappens": "When user is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "SUSCR201",
+            "message": "User created successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000010"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "When required fields are missing or data format is invalid",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EUSCF409",
+          "message": "A user with the same email already exists.",
+          "whenItHappens": "When email is already registered in system",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EUSCF409",
+            "message": "A user with the same email already exists.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/CreateUser",
+        "Email must be unique",
+        "Returns new user's ID",
+        "middleName is optional",
+        "Password validation rules enforced by microservice"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/CreateUser"
+      },
+      "frontendNotes": [
+        "Use returned ID to redirect to user detail or refresh users list",
+        "Show success message after 201",
+        "Handle 409 with specific message about duplicate email",
+        "Handle 400 with field validation errors",
+        "Refresh users list after successful creation",
+        "middleName field is optional in form"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSCR201 = Success User Service Create 201",
+        "OpCode EUSBR400 = Error User Service Bad Request 400",
+        "OpCode EUSCF409 = Error User Service Conflict 409",
+        "Returns only the new user's ID"
+      ]
+    },
+    {
+      "id": "users-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId",
+      "internalEndpoint": "/users/:userId",
+      "httpMethod": "PUT",
+      "summary": "Update user",
+      "description": "Updates a user. This operation is available to privileged users or to the same authenticated user depending on backend rules.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication. Permission check delegated to microservice based on ownership rules.",
+      "ownershipRules": [
+        "User can update their own profile (inferred)",
+        "Users with canUpdate_Users permission can update any user (inferred)",
+        "Actual authorization logic in microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to update (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "userName": {
+            "type": "string",
+            "description": "Username for login"
+          },
+          "firstName": {
+            "type": "string",
+            "description": "User's first name"
+          },
+          "middleName": {
+            "type": "string",
+            "nullable": true,
+            "description": "User's middle name"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "User's last name"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "description": "User's email address"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "userName": "jdoe_updated",
+        "firstName": "John",
+        "middleName": "Michael",
+        "lastName": "Doe",
+        "email": "john.updated@test.com"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": [
+        "userName",
+        "firstName",
+        "middleName",
+        "lastName",
+        "email"
+      ],
+      "validationRules": [
+        "email must be valid email format if provided",
+        "at least one field should be provided to update (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSUP200",
+          "message": "User updated successfully.",
+          "whenItHappens": "When user is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSUP200",
+            "message": "User updated successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "You are not authorized to update this user.",
+          "whenItHappens": "When user tries to update another user without permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "You are not authorized to update this user.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/UpdateUser/{userId}",
+        "Authorization rules enforced by microservice",
+        "User can update own profile",
+        "Privileged users can update any user (inferred from description)",
+        "Returns updated user's ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/UpdateUser/{userId}"
+      },
+      "frontendNotes": [
+        "Use for user profile edit form",
+        "All fields are optional (send only changed fields)",
+        "Handle 403 with clear authorization error message",
+        "Refresh user data after successful update",
+        "For editing own profile, use /users/me to get current data first"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSUP200 = Success User Service Update 200",
+        "OpCode EUSFB403 = Error User Service Forbidden 403",
+        "No gateway-level permission check, delegated to microservice",
+        "All fields are optional in schema"
+      ]
+    },
+    {
+      "id": "users-update-permissions",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/permissions",
+      "internalEndpoint": "/users/:userId/permissions",
+      "httpMethod": "PUT",
+      "summary": "Update user permissions",
+      "description": "Updates the permissions of a specific user.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Users"],
+      "permissionNotes": "Requires canUpdate_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to update permissions (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "permissionIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Array of permission IDs to assign to user"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "permissionIds": [
+          "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+          "019d5a1b-cee1-7e2d-b1b0-79a8c75197e4"
+        ]
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": ["permissionIds"],
+      "validationRules": [
+        "permissionIds must be array of valid UUID strings (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPM200",
+          "message": "User permissions updated successfully.",
+          "whenItHappens": "When permissions are updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPM200",
+            "message": "User permissions updated successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000001"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/UpdateUserPermissions/{userId}",
+        "Requires canUpdate_Users permission",
+        "Replaces user's permissions with provided array",
+        "Get available permissions from /users/permissions endpoint first"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User", "Permission"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/UpdateUserPermissions/{userId}"
+      },
+      "frontendNotes": [
+        "Use /users/permissions to get list of available permissions first",
+        "Show multi-select or checkbox list of permissions",
+        "Send array of permission IDs",
+        "Refresh user data after update to see new permissions",
+        "This is typically admin-only functionality"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSPM200 = Success User Service Permissions 200",
+        "Likely replaces all permissions (not additive - inferred)",
+        "Frontend should fetch current permissions before update"
+      ]
+    },
+    {
+      "id": "users-change-password",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/password",
+      "internalEndpoint": "/users/:userId/password",
+      "httpMethod": "PATCH",
+      "summary": "Change user password",
+      "description": "Changes the password of a user. This operation is available to privileged users or to the same authenticated user depending on backend rules.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Requires authentication. Authorization delegated to microservice.",
+      "ownershipRules": [
+        "User can change their own password (must provide currentPassword)",
+        "Privileged users can change any user's password (currentPassword may be optional - inferred)",
+        "Actual authorization logic in microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["newPassword"],
+        "properties": {
+          "currentPassword": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current password (required when user changes own password)"
+          },
+          "newPassword": {
+            "type": "string",
+            "description": "New password"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "currentPassword": "OldPass123",
+        "newPassword": "NewSecurePass456"
+      },
+      "fieldsRequired": ["newPassword"],
+      "fieldsOptional": ["currentPassword"],
+      "validationRules": [
+        "newPassword is required",
+        "currentPassword required when user changes own password (enforced by microservice)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPW200",
+          "message": "Password updated successfully.",
+          "whenItHappens": "When password is changed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPW200",
+            "message": "Password updated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "You are not authorized to update this password.",
+          "whenItHappens": "When user tries to change another user's password without permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "You are not authorized to update this password.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EUSCF409",
+          "message": "Current password is invalid.",
+          "whenItHappens": "When currentPassword doesn't match user's actual current password",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EUSCF409",
+            "message": "Current password is invalid.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/ChangePassword/{userId}",
+        "User changing own password must provide currentPassword",
+        "Admin/privileged users may change password without currentPassword (inferred)",
+        "Validates currentPassword before allowing change",
+        "Does not return any data, only status"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate"],
+        "entities": ["User"],
+        "claims": ["userId"],
+        "microserviceEndpoint": "/api/User/ChangePassword/{userId}"
+      },
+      "frontendNotes": [
+        "For user changing own password: require currentPassword field",
+        "Handle 409 with message about incorrect current password",
+        "Show success message after 200",
+        "Consider forcing re-login after password change",
+        "Validate newPassword strength on frontend before sending"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSPW200 = Success User Service Password 200",
+        "currentPassword is nullable, enforcement logic in microservice",
+        "No data returned on success"
+      ]
+    },
+    {
+      "id": "users-get-permissions",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/permissions",
+      "internalEndpoint": "/users/permissions",
+      "httpMethod": "GET",
+      "summary": "Get all permissions",
+      "description": "Retrieves the full list of available permissions.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Users"],
+      "permissionNotes": "Requires canRead_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRP200",
+          "message": "Permissions retrieved successfully.",
+          "whenItHappens": "When permissions are retrieved successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRP200",
+            "message": "Permissions retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "canRead_Users"
+              }
+            ]
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/permissions",
+        "Returns all available permissions in system",
+        "Used for permission assignment UI"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Permission"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/permissions"
+      },
+      "frontendNotes": [
+        "Use this to populate permission selection UI",
+        "Call before updating user permissions",
+        "Display permission.name in human-readable format",
+        "Store permission.id for update requests",
+        "Typically used in admin user management screens"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSRP200 = Success User Service Read Permissions 200",
+        "Returns array of {id, name} objects",
+        "Permission names follow pattern: can{Action}_{Resource}"
+      ]
+    },
+    {
+      "id": "users-update-status",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "users",
+      "controllerName": "usersRoutes",
+      "gatewayEndpoint": "/users/:userId/status",
+      "internalEndpoint": "/users/:userId/status",
+      "httpMethod": "DELETE",
+      "summary": "Deactivate user",
+      "description": "Updates the status of a user, typically used for deactivation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canDelete_Users"],
+      "permissionNotes": "Requires canDelete_Users permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string",
+          "required": true,
+          "description": "User ID to deactivate (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "Status code (0 = inactive, 1 = active - inferred)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "status": 0
+      },
+      "fieldsRequired": ["status"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "status must be integer",
+        "valid status values likely 0 or 1 (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSDU200",
+          "message": "User deactivated successfully.",
+          "whenItHappens": "When user status is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSDU200",
+            "message": "User deactivated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "User not found.",
+          "whenItHappens": "When userId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "User not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Users microservice at /api/User/{userId}/status",
+        "Logical deletion - user not physically deleted",
+        "Status field controls active/inactive state",
+        "Requires canDelete_Users permission"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["USERS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/User/{userId}/status"
+      },
+      "frontendNotes": [
+        "Use for user deactivation (soft delete)",
+        "Show confirmation dialog before deactivation",
+        "Refresh users list after successful deactivation",
+        "Consider filtering inactive users in main list",
+        "May want toggle button for activate/deactivate"
+      ],
+      "inferenceNotes": [
+        "OpCode SUSDU200 = Success User Service Deactivate User 200",
+        "Uses DELETE method but requires body with status",
+        "Likely supports reactivation by sending status: 1",
+        "Status values inferred: 0=inactive, 1=active"
+      ]
+    }
+  ]
+}

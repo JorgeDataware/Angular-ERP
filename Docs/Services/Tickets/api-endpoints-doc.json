@@ -1,0 +1,2038 @@
+{
+  "service": {
+    "name": "tickets-service",
+    "description": "Microservicio de gestión de tickets para un sistema de arquitectura de microservicios. Gestiona la creación, asignación, edición y cambio de estado de tickets asociados a grupos y usuarios. Utiliza Fastify como framework web y PostgreSQL como base de datos.",
+    "baseInternalRoutes": ["/tickets", "/health"],
+    "notes": [
+      "Todos los endpoints de /tickets requieren autenticación mediante JWT (Bearer token o cookie)",
+      "El servicio utiliza un patrón de respuesta estándar: { statusCode, intOpCode, message, data }",
+      "El campo 'data' siempre es un array, incluso para respuestas de un solo elemento",
+      "La autenticación extrae userId y permissions del JWT",
+      "El SuperAdmin tiene un userId especial: '00000000-0000-0000-0000-000000000001'",
+      "Los tickets solo pueden editarse cuando están en estado Open (1)",
+      "Los tickets solo pueden asignarse cuando están en estado Open (1) y no tienen usuario asignado",
+      "Solo el usuario asignado puede iniciar trabajo (cambiar a InProgress) o finalizar (cambiar a Closed)",
+      "Solo el creador o el SuperAdmin pueden editar un ticket",
+      "Solo el owner del grupo o el SuperAdmin pueden asignar tickets"
+    ]
+  },
+  "globalEnums": [
+    {
+      "name": "TicketStatus",
+      "description": "Estados posibles de un ticket",
+      "values": [
+        {
+          "key": "Open",
+          "value": 1,
+          "description": "Ticket creado y pendiente de asignación o inicio"
+        },
+        {
+          "key": "InProgress",
+          "value": 2,
+          "description": "Ticket en progreso, siendo trabajado por el usuario asignado"
+        },
+        {
+          "key": "InReview",
+          "value": 3,
+          "description": "Ticket en revisión (no utilizado actualmente en la lógica del servicio)"
+        },
+        {
+          "key": "Closed",
+          "value": 4,
+          "description": "Ticket finalizado y cerrado"
+        }
+      ]
+    },
+    {
+      "name": "TicketPriority",
+      "description": "Niveles de prioridad de un ticket",
+      "values": [
+        { "key": "Low", "value": 1, "description": "Prioridad baja" },
+        { "key": "Medium", "value": 2, "description": "Prioridad media" },
+        { "key": "High", "value": 3, "description": "Prioridad alta" }
+      ]
+    },
+    {
+      "name": "GroupStatus",
+      "description": "Estados de un grupo",
+      "values": [
+        { "key": "Active", "value": 1, "description": "Grupo activo" },
+        { "key": "Inactive", "value": 2, "description": "Grupo inactivo" }
+      ]
+    },
+    {
+      "name": "UserStatus",
+      "description": "Estados de un usuario",
+      "values": [
+        { "key": "Active", "value": 1, "description": "Usuario activo" },
+        { "key": "Inactive", "value": 2, "description": "Usuario inactivo" }
+      ]
+    },
+    {
+      "name": "SystemUsers",
+      "description": "Usuarios especiales del sistema",
+      "values": [
+        {
+          "key": "SuperAdminId",
+          "value": "00000000-0000-0000-0000-000000000001",
+          "description": "ID del superadministrador del sistema"
+        }
+      ]
+    }
+  ],
+  "globalPermissions": [
+    {
+      "name": "canCreate_Tickets",
+      "description": "Permiso para crear tickets",
+      "requiredFor": ["POST /tickets"]
+    },
+    {
+      "name": "canRead_Tickets",
+      "description": "Permiso para leer tickets",
+      "requiredFor": [
+        "GET /tickets",
+        "GET /tickets/pending",
+        "GET /tickets/:ticketId",
+        "GET /tickets/group/:groupId"
+      ]
+    },
+    {
+      "name": "canUpdate_Tickets",
+      "description": "Permiso para actualizar tickets (edición de campos)",
+      "requiredFor": ["PATCH /tickets/:ticketId"]
+    },
+    {
+      "name": "canDelete_Tickets",
+      "description": "Permiso para eliminar tickets",
+      "requiredFor": ["(No implementado actualmente)"]
+    },
+    {
+      "name": "canAssign_Tickets",
+      "description": "Permiso para asignar tickets a usuarios",
+      "requiredFor": ["POST /tickets/:ticketId/assign"]
+    },
+    {
+      "name": "canUpdateStatus_Tickets",
+      "description": "Permiso para actualizar el estado de tickets (start-work, finish)",
+      "requiredFor": [
+        "POST /tickets/:ticketId/start-work",
+        "POST /tickets/:ticketId/finish"
+      ]
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "health-check",
+      "serviceName": "tickets-service",
+      "controllerName": "app.ts (inline handler)",
+      "gatewayEndpoint": null,
+      "internalEndpoint": "/health",
+      "httpMethod": "GET",
+      "summary": "Health check del servicio",
+      "description": "Endpoint para verificar que el servicio está activo y funcionando correctamente. No requiere autenticación.",
+      "requiresAuth": false,
+      "authType": "none",
+      "requiredPermissions": [],
+      "permissionNotes": "Este endpoint es público y no requiere permisos",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [],
+      "cookies": [],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKHL200",
+          "message": "Tickets service is healthy.",
+          "whenItHappens": "Siempre que el servicio esté respondiendo correctamente",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKHL200",
+            "message": "Tickets service is healthy.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "No requiere autenticación",
+        "Siempre retorna 200 si el servicio está levantado"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": [],
+        "helpers": [],
+        "entities": [],
+        "claims": []
+      },
+      "frontendNotes": [
+        "Útil para verificar conectividad con el servicio antes de hacer llamadas autenticadas",
+        "Puede usarse en heartbeat checks o health monitoring"
+      ],
+      "inferenceNotes": [
+        "No tiene comentario 'Corresponde a:' porque está definido directamente en app.ts",
+        "Es un endpoint estándar de health check"
+      ]
+    },
+    {
+      "id": "get-all-tickets",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - getTicketsHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/",
+      "internalEndpoint": "/tickets/",
+      "httpMethod": "GET",
+      "summary": "Obtener todos los tickets",
+      "description": "Recupera una lista completa de todos los tickets del sistema con información completa incluyendo grupo, usuario creador y usuario asignado.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canRead_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Tickets retrieved successfully.",
+          "whenItHappens": "Cuando se recuperan exitosamente todos los tickets",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "TicketListItemDto[]"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "Fix login bug",
+                "description": "Users cannot log in with their credentials",
+                "comments": "Checked database connections",
+                "status": 1,
+                "priority": 3,
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-15T14:22:00Z",
+                "dueDate": "2024-01-20T23:59:59Z",
+                "groupId": "660e8400-e29b-41d4-a716-446655440000",
+                "groupName": "Backend Team",
+                "createdByUserId": "770e8400-e29b-41d4-a716-446655440000",
+                "createdByUserName": "John Doe",
+                "assignedUserId": "880e8400-e29b-41d4-a716-446655440000",
+                "assignedUserName": "Jane Smith"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Missing authentication token. / Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT o el token es inválido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to read tickets.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso 'canRead_Tickets'",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You do not have permission to read tickets.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while retrieving tickets.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while retrieving tickets.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Retorna todos los tickets del sistema sin filtrado",
+        "Incluye tickets de todos los grupos y todos los estados",
+        "Los tickets se ordenan por fecha de creación descendente (más recientes primero)",
+        "Incluye información completa del ticket con datos relacionados (grupo, usuario creador, usuario asignado)"
+      ],
+      "dependencies": {
+        "repositories": ["TicketsRepository.getTickets()"],
+        "services": ["TicketsService.getTickets()"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket", "group", "user"],
+        "claims": ["permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Ideal para mostrar una tabla o lista completa de todos los tickets",
+        "El campo 'data' siempre es un array, puede estar vacío si no hay tickets",
+        "Los campos assignedUserId y assignedUserName pueden ser null si el ticket no está asignado",
+        "El campo comments puede ser null",
+        "Los valores de status y priority son numéricos, usar los enums globales para mapear a labels",
+        "Las fechas están en formato ISO 8601 string"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "get-pending-tickets",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - getPendingTicketsHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/pending",
+      "internalEndpoint": "/tickets/pending",
+      "httpMethod": "GET",
+      "summary": "Obtener tickets pendientes de asignación",
+      "description": "Recupera tickets que están en estado Open (1) y no tienen usuario asignado. Si el usuario es SuperAdmin, retorna todos los tickets pendientes del sistema. Si es un usuario regular, solo retorna los tickets pendientes de grupos donde el usuario es owner.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canRead_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [
+        "Si userId === '00000000-0000-0000-0000-000000000001' (SuperAdmin): retorna TODOS los tickets pendientes del sistema",
+        "Si userId !== SuperAdmin: retorna solo tickets pendientes de grupos donde el usuario es created_by_user_id (owner del grupo)"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Pending tickets retrieved successfully.",
+          "whenItHappens": "Cuando se recuperan exitosamente los tickets pendientes filtrados por rol del usuario",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "TicketListItemDto[]"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Pending tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "New feature request",
+                "description": "Implement user dashboard",
+                "comments": null,
+                "status": 1,
+                "priority": 2,
+                "createdAt": "2024-01-16T09:00:00Z",
+                "updatedAt": "2024-01-16T09:00:00Z",
+                "dueDate": "2024-01-25T23:59:59Z",
+                "groupId": "660e8400-e29b-41d4-a716-446655440000",
+                "groupName": "Frontend Team",
+                "createdByUserId": "770e8400-e29b-41d4-a716-446655440000",
+                "createdByUserName": "John Doe",
+                "assignedUserId": null,
+                "assignedUserName": null
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to read pending tickets.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso 'canRead_Tickets'",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You do not have permission to read pending tickets.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while retrieving pending tickets.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while retrieving pending tickets.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Ticket pendiente = status === 1 (Open) AND assigned_user_id IS NULL",
+        "SuperAdmin (userId === '00000000-0000-0000-0000-000000000001') ve TODOS los tickets pendientes",
+        "Usuario regular ve solo tickets pendientes de grupos donde es owner (group.created_by_user_id === userId)",
+        "Los tickets se ordenan por fecha de creación descendente (más recientes primero)",
+        "assignedUserId y assignedUserName siempre serán null en esta respuesta por definición de 'pending'"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.getAllPendingTickets() - para SuperAdmin",
+          "TicketsRepository.getPendingTicketsByGroupOwner(userId) - para usuarios regulares"
+        ],
+        "services": ["TicketsService.getPendingTickets(requesterId)"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket", "group", "user"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Útil para mostrar una cola de tickets pendientes de asignación",
+        "Los group owners solo ven tickets de SUS grupos, el SuperAdmin ve todo",
+        "assignedUserId y assignedUserName siempre null en esta respuesta",
+        "Ideal para una vista de 'Asignar Tickets' o 'Tickets sin Asignar'",
+        "El array puede estar vacío si no hay tickets pendientes según el filtro de rol"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "get-ticket-by-id",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - getTicketByIdHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/{ticketId}",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "GET",
+      "summary": "Obtener un ticket por ID",
+      "description": "Recupera la información completa de un ticket específico identificado por su ID UUID.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canRead_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del ticket a recuperar",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Ticket retrieved successfully.",
+          "whenItHappens": "Cuando se encuentra y recupera exitosamente el ticket por su ID",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "TicketListItemDto[] (array with single element)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Ticket retrieved successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "Fix login bug",
+                "description": "Users cannot log in with their credentials",
+                "comments": "Checked database connections",
+                "status": 2,
+                "priority": 3,
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-16T08:15:00Z",
+                "dueDate": "2024-01-20T23:59:59Z",
+                "groupId": "660e8400-e29b-41d4-a716-446655440000",
+                "groupName": "Backend Team",
+                "createdByUserId": "770e8400-e29b-41d4-a716-446655440000",
+                "createdByUserName": "John Doe",
+                "assignedUserId": "880e8400-e29b-41d4-a716-446655440000",
+                "assignedUserName": "Jane Smith"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Missing authentication token. / Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT o el token es inválido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to read tickets.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso 'canRead_Tickets'",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You do not have permission to read tickets.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "Cuando no existe un ticket con el ticketId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while retrieving the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while retrieving the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Retorna un solo ticket identificado por UUID",
+        "Incluye información completa del ticket con datos relacionados (grupo, usuario creador, usuario asignado)",
+        "No aplica filtros de ownership, cualquier usuario con permiso canRead_Tickets puede ver cualquier ticket",
+        "El ticket puede estar en cualquier estado"
+      ],
+      "dependencies": {
+        "repositories": ["TicketsRepository.getTicketById(ticketId)"],
+        "services": ["TicketsService.getTicketById(ticketId)"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket", "group", "user"],
+        "claims": ["permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Ideal para mostrar un modal de detalle o página de detalle de un ticket específico",
+        "El campo 'data' es un array con un solo elemento cuando el ticket existe",
+        "Manejar el 404 para mostrar mensaje 'Ticket no encontrado'",
+        "Los campos assignedUserId y assignedUserName pueden ser null si el ticket no está asignado",
+        "El campo comments puede ser null",
+        "Usar opCode 'STKRD200' (no 'ReadOneOk') según el código (línea 71 del controller)"
+      ],
+      "inferenceNotes": [
+        "El opCode usado es 'ReadOneOk' que mapea a 'STKRD200', el mismo que 'ReadOk' - ambos tienen el mismo valor"
+      ]
+    },
+    {
+      "id": "create-ticket",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - createTicketHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/",
+      "internalEndpoint": "/tickets/",
+      "httpMethod": "POST",
+      "summary": "Crear un nuevo ticket",
+      "description": "Crea un nuevo ticket asociado a un grupo específico. El ticket se crea con estado Open (1) y sin usuario asignado inicialmente. El userId del JWT se asigna como created_by_user_id del ticket.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canCreate_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Título del ticket (se aplica trim)"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Descripción detallada del ticket (se aplica trim)"
+          },
+          "comments": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Comentarios adicionales (opcional, se aplica trim)",
+            "optional": true
+          },
+          "priority": {
+            "type": "enum",
+            "values": ["Low", "Medium", "High"],
+            "description": "Prioridad del ticket (string literal, se convierte a número internamente)"
+          },
+          "dueDate": {
+            "type": "string",
+            "format": "datetime (ISO 8601)",
+            "description": "Fecha límite del ticket (opcional)",
+            "optional": true
+          },
+          "groupId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID del grupo al que pertenece el ticket"
+          }
+        },
+        "required": ["title", "description", "priority", "groupId"]
+      },
+      "requestBodyExample": {
+        "title": "Implementar autenticación de dos factores",
+        "description": "Añadir soporte para autenticación 2FA en el sistema de login para mejorar la seguridad de las cuentas de usuario",
+        "comments": "Priorizar integración con Google Authenticator",
+        "priority": "High",
+        "dueDate": "2024-02-01T23:59:59Z",
+        "groupId": "660e8400-e29b-41d4-a716-446655440000"
+      },
+      "fieldsOptional": ["comments", "dueDate"],
+      "fieldsRequired": ["title", "description", "priority", "groupId"],
+      "validationRules": [
+        "title: string no vacío (después de trim), máximo 200 caracteres",
+        "description: string no vacío (después de trim), máximo 4000 caracteres",
+        "comments: string opcional, máximo 4000 caracteres (se aplica trim)",
+        "priority: debe ser exactamente 'Low', 'Medium', o 'High' (case-sensitive)",
+        "dueDate: opcional, debe ser string en formato ISO 8601 datetime si se proporciona",
+        "groupId: debe ser UUID válido",
+        "Validación con Zod schema - retorna 400 Bad Request si falla"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "STKCR201",
+          "message": "Ticket created successfully.",
+          "whenItHappens": "Cuando el ticket se crea exitosamente en la base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array with single object { id: string }"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "STKCR201",
+            "message": "Ticket created successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "ETKBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "Cuando el body no cumple con el schema de validación de Zod",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "ETKBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to create tickets.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso 'canCreate_Tickets'",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You do not have permission to create tickets.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "Cuando el groupId proporcionado no existe en la base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The specified group is inactive.",
+          "whenItHappens": "Cuando el grupo existe pero su status !== 1 (Active)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The specified group is inactive.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while creating the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while creating the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El ticket se crea con status = 1 (Open) automáticamente",
+        "El ticket se crea con assigned_user_id = null (sin asignar)",
+        "El created_by_user_id se toma del userId del JWT",
+        "El groupId debe existir en la base de datos",
+        "El grupo debe tener status = 1 (Active), si no retorna 409 Conflict",
+        "El campo priority se convierte de string ('Low'/'Medium'/'High') a número (1/2/3) internamente",
+        "Se genera un UUID aleatorio para el id del ticket",
+        "created_at y updated_at se establecen a NOW() en el momento de inserción"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.groupExists(groupId) - verifica existencia y status del grupo",
+          "TicketsRepository.createTicket(...) - inserta el ticket en la BD"
+        ],
+        "services": ["TicketsService.createTicket(requesterId, request)"],
+        "helpers": ["hasPermission()", "createTicketSchema.safeParse()"],
+        "entities": ["ticket", "group"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Tras crear el ticket, la respuesta incluye el ID generado en data[0].id",
+        "Usar ese ID para redireccionar al detalle del ticket recién creado",
+        "Mostrar mensaje de éxito 'Ticket creado exitosamente'",
+        "Validar el formulario en frontend para coincidir con las reglas de Zod (ahorra requests 400)",
+        "El campo priority debe enviarse como string literal: 'Low', 'Medium', o 'High'",
+        "El campo dueDate debe enviarse en formato ISO 8601 si se incluye",
+        "Manejar 404 para mostrar 'Grupo no encontrado'",
+        "Manejar 409 para mostrar 'No se puede crear ticket en un grupo inactivo'"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "edit-ticket",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - editTicketHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/{ticketId}",
+      "internalEndpoint": "/tickets/:ticketId",
+      "httpMethod": "PATCH",
+      "summary": "Editar un ticket existente",
+      "description": "Actualiza uno o más campos de un ticket existente. Solo puede editar el creador del ticket o el SuperAdmin. Solo se pueden editar tickets en estado Open (1).",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canUpdate_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [
+        "Solo el creador del ticket (created_by_user_id === userId) puede editar",
+        "O el SuperAdmin (userId === '00000000-0000-0000-0000-000000000001') puede editar cualquier ticket",
+        "Si no cumple, retorna 403 Forbidden con mensaje 'You are not authorized to edit this ticket.'"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del ticket a editar",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200,
+            "description": "Nuevo título del ticket (opcional, se aplica trim)",
+            "optional": true
+          },
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4000,
+            "description": "Nueva descripción del ticket (opcional, se aplica trim)",
+            "optional": true
+          },
+          "comments": {
+            "type": "string | null",
+            "maxLength": 4000,
+            "description": "Nuevos comentarios o null para limpiar (opcional, se aplica trim)",
+            "optional": true
+          },
+          "priority": {
+            "type": "enum",
+            "values": ["Low", "Medium", "High"],
+            "description": "Nueva prioridad del ticket (opcional)",
+            "optional": true
+          },
+          "dueDate": {
+            "type": "string | null",
+            "format": "datetime (ISO 8601)",
+            "description": "Nueva fecha límite o null para limpiar (opcional)",
+            "optional": true
+          }
+        },
+        "required": [],
+        "additionalValidation": "Al menos un campo debe proporcionarse (refinement de Zod)"
+      },
+      "requestBodyExample": {
+        "title": "Implementar autenticación de dos factores (ACTUALIZADO)",
+        "priority": "Medium",
+        "comments": "Se redujo prioridad tras análisis de riesgos"
+      },
+      "fieldsOptional": [
+        "title",
+        "description",
+        "comments",
+        "priority",
+        "dueDate"
+      ],
+      "fieldsRequired": [],
+      "validationRules": [
+        "Al menos un campo debe proporcionarse en el body (Zod refinement)",
+        "title: opcional, string no vacío (después de trim) si se proporciona, máximo 200 caracteres",
+        "description: opcional, string no vacío (después de trim) si se proporciona, máximo 4000 caracteres",
+        "comments: opcional, string máximo 4000 caracteres o null explícito para limpiar",
+        "priority: opcional, debe ser 'Low', 'Medium', o 'High' si se proporciona",
+        "dueDate: opcional, string en formato ISO 8601 datetime o null explícito para limpiar",
+        "Si no se proporciona ningún campo, retorna 400 Bad Request"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKUP200",
+          "message": "Ticket updated successfully.",
+          "whenItHappens": "Cuando el ticket se actualiza exitosamente",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array with single object { id: string }"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKUP200",
+            "message": "Ticket updated successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "ETKBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "Cuando el body no cumple con el schema de validación (no se proporciona ningún campo o formato inválido)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "ETKBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to update tickets. / You are not authorized to edit this ticket.",
+          "whenItHappens": "Cuando el usuario no tiene permiso 'canUpdate_Tickets' O cuando no es el creador ni el SuperAdmin",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to edit this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "Cuando no existe un ticket con el ticketId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket cannot be edited because it is not open.",
+          "whenItHappens": "Cuando el ticket existe pero su status !== 1 (Open)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be edited because it is not open.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while updating the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while updating the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Solo se pueden editar tickets con status = 1 (Open)",
+        "Solo el creador del ticket o el SuperAdmin pueden editar",
+        "Se actualiza updated_at a NOW() automáticamente",
+        "Los campos no proporcionados NO se modifican (actualización parcial)",
+        "El campo priority se convierte de string a número internamente si se proporciona",
+        "Si comments o dueDate se envían como null explícitamente, se limpian en la BD",
+        "La actualización usa COALESCE para campos simples y condicionales para campos nullables"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.getTicketForEdit(ticketId) - obtiene id, status, createdByUserId",
+          "TicketsRepository.updateTicket(ticketId, fields) - actualiza los campos"
+        ],
+        "services": [
+          "TicketsService.editTicket(ticketId, requesterId, request)"
+        ],
+        "helpers": ["hasPermission()", "editTicketSchema.safeParse()"],
+        "entities": ["ticket"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Solo mostrar opción de editar si el usuario es el creador o SuperAdmin",
+        "Deshabilitar edición si el ticket NO está en estado Open (status !== 1)",
+        "Mostrar mensaje claro si se intenta editar un ticket en otro estado: 'Solo se pueden editar tickets en estado Abierto'",
+        "Enviar solo los campos que realmente cambiaron (optimización)",
+        "Para limpiar comments o dueDate, enviar explícitamente null",
+        "Tras actualizar, refrescar la vista de detalle del ticket",
+        "Manejar 403 'not authorized' vs 'no permission' para mensajes diferenciados"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "assign-ticket",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - assignTicketHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/{ticketId}/assign",
+      "internalEndpoint": "/tickets/:ticketId/assign",
+      "httpMethod": "POST",
+      "summary": "Asignar un ticket a un usuario",
+      "description": "Asigna un ticket a un usuario específico del grupo. Solo puede asignar el owner del grupo o el SuperAdmin. El ticket debe estar en estado Open y no tener usuario asignado. El usuario asignado debe ser miembro activo del grupo.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canAssign_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canAssign_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [
+        "Solo el owner del grupo (group.created_by_user_id === userId) puede asignar tickets de ese grupo",
+        "O el SuperAdmin (userId === '00000000-0000-0000-0000-000000000001') puede asignar cualquier ticket",
+        "Si no cumple, retorna 403 Forbidden con mensaje 'You are not authorized to assign this ticket.'"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del ticket a asignar",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "assignedUserId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "ID del usuario al que se asignará el ticket"
+          }
+        },
+        "required": ["assignedUserId"]
+      },
+      "requestBodyExample": {
+        "assignedUserId": "880e8400-e29b-41d4-a716-446655440000"
+      },
+      "fieldsOptional": [],
+      "fieldsRequired": ["assignedUserId"],
+      "validationRules": [
+        "assignedUserId: debe ser UUID válido",
+        "Validación con Zod schema - retorna 400 si falla"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKAS200",
+          "message": "Ticket assigned successfully.",
+          "whenItHappens": "Cuando el ticket se asigna exitosamente al usuario",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array with single object { id: string }"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKAS200",
+            "message": "Ticket assigned successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "ETKBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "Cuando el body no cumple con el schema de validación (assignedUserId no es UUID válido)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "ETKBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to assign tickets. / You are not authorized to assign this ticket.",
+          "whenItHappens": "Cuando el usuario no tiene permiso 'canAssign_Tickets' O cuando no es el owner del grupo ni el SuperAdmin",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to assign this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found. / The specified group was not found. / The specified assigned user was not found.",
+          "whenItHappens": "Cuando no existe el ticket, el grupo, o el usuario a asignar",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified assigned user was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket is already assigned. / The ticket is not open. / The specified group is inactive. / The specified assigned user is inactive. / The specified assigned user does not belong to the group.",
+          "whenItHappens": "Cuando hay un conflicto de estado: ticket ya asignado, ticket no Open, grupo inactivo, usuario inactivo, o usuario no es miembro del grupo",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket is already assigned.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while assigning the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while assigning the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El ticket debe estar en status = 1 (Open), si no retorna 409 'The ticket is not open.'",
+        "El ticket NO debe tener assigned_user_id, si ya está asignado retorna 409 'The ticket is already assigned.'",
+        "Solo el owner del grupo o SuperAdmin pueden asignar",
+        "El grupo debe existir y tener status = 1 (Active), si no retorna 404 o 409",
+        "El usuario a asignar debe existir, si no retorna 404 'The specified assigned user was not found.'",
+        "El usuario a asignar debe tener status = 1 (Active), si no retorna 409 'The specified assigned user is inactive.'",
+        "El usuario a asignar DEBE ser miembro del grupo (verificado en tabla group_members), si no retorna 409 'The specified assigned user does not belong to the group.'",
+        "Se actualiza assigned_user_id y updated_at del ticket"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.getTicketForAssignment(ticketId) - obtiene id, status, groupId, assignedUserId",
+          "TicketsRepository.getGroupOwnership(groupId) - obtiene id, status, createdByUserId del grupo",
+          "TicketsRepository.getUserById(assignedUserId) - verifica existencia y status del usuario",
+          "TicketsRepository.isUserMemberOfGroup(groupId, assignedUserId) - verifica membresía",
+          "TicketsRepository.assignTicket(ticketId, assignedUserId) - actualiza el ticket"
+        ],
+        "services": [
+          "TicketsService.assignTicket(ticketId, requesterId, request)"
+        ],
+        "helpers": ["hasPermission()", "assignTicketSchema.safeParse()"],
+        "entities": ["ticket", "group", "user", "group_members"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Solo mostrar opción de asignar si el usuario es owner del grupo o SuperAdmin",
+        "Deshabilitar asignación si el ticket NO está en estado Open o ya está asignado",
+        "Mostrar lista de usuarios del grupo para seleccionar (solo miembros activos)",
+        "Manejar múltiples mensajes 409 diferentes para dar feedback específico al usuario",
+        "Tras asignar, refrescar la vista de tickets pendientes y/o detalle del ticket",
+        "Mostrar mensaje de éxito 'Ticket asignado exitosamente a [nombre del usuario]'"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "start-work-on-ticket",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - startWorkHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/{ticketId}/start-work",
+      "internalEndpoint": "/tickets/:ticketId/start-work",
+      "httpMethod": "POST",
+      "summary": "Iniciar trabajo en un ticket",
+      "description": "Cambia el estado de un ticket de Open (1) a InProgress (2). Solo puede iniciar trabajo el usuario asignado al ticket.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canUpdateStatus_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [
+        "Solo el usuario asignado al ticket (assigned_user_id === userId) puede iniciar trabajo",
+        "Si no es el usuario asignado, retorna 403 Forbidden con mensaje 'You are not authorized to start work on this ticket.'"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del ticket en el que se iniciará trabajo",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKSW200",
+          "message": "Work started successfully.",
+          "whenItHappens": "Cuando el estado del ticket se cambia exitosamente a InProgress (2)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array with single object { id: string }"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKSW200",
+            "message": "Work started successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to start work on tickets. / You are not authorized to start work on this ticket.",
+          "whenItHappens": "Cuando el usuario no tiene permiso 'canUpdateStatus_Tickets' O cuando no es el usuario asignado al ticket",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to start work on this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "Cuando no existe un ticket con el ticketId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket has no assigned user. / The ticket cannot start work because it is not open.",
+          "whenItHappens": "Cuando el ticket no tiene assigned_user_id O cuando el ticket status !== 1 (Open)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot start work because it is not open.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while starting work on the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while starting work on the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El ticket DEBE tener assigned_user_id (no puede ser null), si no retorna 409 'The ticket has no assigned user.'",
+        "Solo el usuario asignado puede iniciar trabajo (assigned_user_id === userId del JWT)",
+        "El ticket debe estar en status = 1 (Open), si no retorna 409 'The ticket cannot start work because it is not open.'",
+        "Se actualiza status a 2 (InProgress) y updated_at a NOW()",
+        "No requiere body en el request"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.getTicketForStatusUpdate(ticketId) - obtiene id, status, assignedUserId",
+          "TicketsRepository.updateTicketStatus(ticketId, status) - actualiza el status"
+        ],
+        "services": ["TicketsService.startWork(ticketId, requesterId)"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Solo mostrar botón 'Iniciar Trabajo' si el ticket está asignado al usuario logueado",
+        "Deshabilitar si el ticket NO está en estado Open (status !== 1)",
+        "No requiere formulario, solo un botón de acción",
+        "Tras iniciar trabajo, actualizar el estado visual del ticket a 'En Progreso'",
+        "Mostrar mensaje de éxito 'Trabajo iniciado exitosamente'",
+        "Manejar 409 para mostrar mensajes específicos según el motivo del conflicto"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "finish-ticket",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - finishTicketHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/tickets/{ticketId}/finish",
+      "internalEndpoint": "/tickets/:ticketId/finish",
+      "httpMethod": "POST",
+      "summary": "Finalizar un ticket",
+      "description": "Cambia el estado de un ticket de InProgress (2) a Closed (4). Solo puede finalizar el usuario asignado al ticket.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdateStatus_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canUpdateStatus_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [
+        "Solo el usuario asignado al ticket (assigned_user_id === userId) puede finalizar",
+        "Si no es el usuario asignado, retorna 403 Forbidden con mensaje 'You are not authorized to finish this ticket.'"
+      ],
+      "routeParams": [
+        {
+          "name": "ticketId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del ticket a finalizar",
+          "example": "550e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKFN200",
+          "message": "Ticket finished successfully.",
+          "whenItHappens": "Cuando el estado del ticket se cambia exitosamente a Closed (4)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array with single object { id: string }"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKFN200",
+            "message": "Ticket finished successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT, el token es inválido, o no contiene userId válido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to finish tickets. / You are not authorized to finish this ticket.",
+          "whenItHappens": "Cuando el usuario no tiene permiso 'canUpdateStatus_Tickets' O cuando no es el usuario asignado al ticket",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You are not authorized to finish this ticket.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified ticket was not found.",
+          "whenItHappens": "Cuando no existe un ticket con el ticketId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified ticket was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "ETKCF409",
+          "message": "The ticket has no assigned user. / The ticket cannot be finished because it is not in progress.",
+          "whenItHappens": "Cuando el ticket no tiene assigned_user_id O cuando el ticket status !== 2 (InProgress)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "ETKCF409",
+            "message": "The ticket cannot be finished because it is not in progress.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while finishing the ticket.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while finishing the ticket.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El ticket DEBE tener assigned_user_id (no puede ser null), si no retorna 409 'The ticket has no assigned user.'",
+        "Solo el usuario asignado puede finalizar (assigned_user_id === userId del JWT)",
+        "El ticket debe estar en status = 2 (InProgress), si no retorna 409 'The ticket cannot be finished because it is not in progress.'",
+        "Se actualiza status a 4 (Closed) y updated_at a NOW()",
+        "No requiere body en el request"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.getTicketForStatusUpdate(ticketId) - obtiene id, status, assignedUserId",
+          "TicketsRepository.updateTicketStatus(ticketId, status) - actualiza el status"
+        ],
+        "services": ["TicketsService.finishTicket(ticketId, requesterId)"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket"],
+        "claims": ["userId from JWT", "permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Solo mostrar botón 'Finalizar Ticket' si el ticket está asignado al usuario logueado",
+        "Deshabilitar si el ticket NO está en estado InProgress (status !== 2)",
+        "No requiere formulario, solo un botón de acción (puede requerir confirmación)",
+        "Tras finalizar, actualizar el estado visual del ticket a 'Cerrado'",
+        "Mostrar mensaje de éxito 'Ticket finalizado exitosamente'",
+        "Manejar 409 para mostrar mensajes específicos según el motivo del conflicto",
+        "Considerar mostrar confirmación antes de finalizar: '¿Está seguro de que desea cerrar este ticket?'"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "get-tickets-by-group",
+      "serviceName": "tickets-service",
+      "controllerName": "tickets.controller.ts - getTicketsByGroupHandler",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/groups/{groupId}/tickets",
+      "internalEndpoint": "/tickets/group/:groupId",
+      "httpMethod": "GET",
+      "summary": "Obtener todos los tickets de un grupo",
+      "description": "Recupera todos los tickets asociados a un grupo específico, independientemente de su estado. Incluye información completa del ticket con datos relacionados.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Tickets"],
+      "permissionNotes": "Requiere el permiso 'canRead_Tickets' en el JWT. Si no se tiene, retorna 403 Forbidden.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del grupo cuyos tickets se desean obtener",
+          "example": "660e8400-e29b-41d4-a716-446655440000"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con JWT válido",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "JWT token alternativo si no se envía en Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Group tickets retrieved successfully.",
+          "whenItHappens": "Cuando se recuperan exitosamente los tickets del grupo",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "TicketListItemDto[]"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Group tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "550e8400-e29b-41d4-a716-446655440000",
+                "title": "Fix login bug",
+                "description": "Users cannot log in with their credentials",
+                "comments": "Checked database connections",
+                "status": 2,
+                "priority": 3,
+                "createdAt": "2024-01-15T10:30:00Z",
+                "updatedAt": "2024-01-16T08:15:00Z",
+                "dueDate": "2024-01-20T23:59:59Z",
+                "groupId": "660e8400-e29b-41d4-a716-446655440000",
+                "groupName": "Backend Team",
+                "createdByUserId": "770e8400-e29b-41d4-a716-446655440000",
+                "createdByUserName": "John Doe",
+                "assignedUserId": "880e8400-e29b-41d4-a716-446655440000",
+                "assignedUserName": "Jane Smith"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "ETKAU401",
+          "message": "Missing authentication token. / Invalid authentication token.",
+          "whenItHappens": "Cuando no se proporciona token JWT o el token es inválido",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "ETKAU401",
+            "message": "Invalid authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "ETKFB403",
+          "message": "You do not have permission to read tickets.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso 'canRead_Tickets'",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "ETKFB403",
+            "message": "You do not have permission to read tickets.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "Cuando no existe un grupo con el groupId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 500,
+          "intOpCode": "ETKIN500",
+          "message": "An unexpected error occurred while retrieving group tickets.",
+          "whenItHappens": "Cuando ocurre un error inesperado en el servicio o base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (always empty [])"
+          },
+          "responseExample": {
+            "statusCode": 500,
+            "intOpCode": "ETKIN500",
+            "message": "An unexpected error occurred while retrieving group tickets.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Primero verifica que el grupo exista, si no retorna 404",
+        "Retorna todos los tickets del grupo sin filtrar por estado",
+        "Los tickets se ordenan por fecha de creación descendente (más recientes primero)",
+        "Incluye información completa del ticket con datos relacionados (grupo, usuario creador, usuario asignado)",
+        "No aplica filtros de ownership, cualquier usuario con permiso canRead_Tickets puede ver tickets de cualquier grupo"
+      ],
+      "dependencies": {
+        "repositories": [
+          "TicketsRepository.groupExists(groupId) - verifica existencia del grupo",
+          "TicketsRepository.getTicketsByGroupId(groupId) - obtiene tickets del grupo"
+        ],
+        "services": ["TicketsService.getTicketsByGroupId(groupId)"],
+        "helpers": ["hasPermission()"],
+        "entities": ["ticket", "group", "user"],
+        "claims": ["permissions array from JWT"]
+      },
+      "frontendNotes": [
+        "Útil para mostrar una vista de tickets filtrada por grupo",
+        "El array puede estar vacío si el grupo no tiene tickets",
+        "Ideal para una página de detalle de grupo que liste todos sus tickets",
+        "Manejar 404 para mostrar 'Grupo no encontrado'",
+        "Los campos assignedUserId y assignedUserName pueden ser null si el ticket no está asignado",
+        "El campo comments puede ser null",
+        "Usar los enums globales para mapear status y priority a labels legibles"
+      ],
+      "inferenceNotes": [
+        "Inconsistencia detectada: el comentario 'Corresponde a:' indica ruta del gateway '/groups/{groupId}/tickets' pero la ruta interna del servicio es '/tickets/group/:groupId'. Esto sugiere que el API Gateway reescribe la ruta antes de enviarla al microservicio."
+      ]
+    }
+  ],
+  "detectedInconsistencies": [
+    {
+      "type": "route-mismatch",
+      "severity": "info",
+      "endpoint": "get-tickets-by-group",
+      "description": "El comentario 'Corresponde a:' indica ruta del gateway 'https://mi-gateway.onrender.com/groups/{groupId}/tickets' pero la ruta interna del servicio es '/tickets/group/:groupId'. Esto indica que el API Gateway hace un mapeo/reescritura de ruta.",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/groups/{groupId}/tickets",
+      "internalEndpoint": "/tickets/group/:groupId",
+      "recommendation": "El frontend debe llamar a '/groups/{groupId}/tickets' en el gateway. El gateway se encargará de redirigir a '/tickets/group/{groupId}' en el microservicio."
+    },
+    {
+      "type": "missing-gateway-mapping",
+      "severity": "medium",
+      "endpoint": "health-check",
+      "description": "El endpoint '/health' no tiene comentario 'Corresponde a:' que indique su mapeo en el API Gateway",
+      "internalEndpoint": "/health",
+      "gatewayEndpoint": null,
+      "recommendation": "Verificar si existe un endpoint de health check en el API Gateway o si este endpoint solo es accesible internamente."
+    },
+    {
+      "type": "opcode-duplicate",
+      "severity": "low",
+      "description": "Los opcodes 'ReadOk' y 'ReadOneOk' mapean al mismo valor 'STKRD200'",
+      "affectedEndpoints": [
+        "get-all-tickets",
+        "get-ticket-by-id",
+        "get-pending-tickets",
+        "get-tickets-by-group"
+      ],
+      "recommendation": "Considerar usar opcodes distintos para diferenciar entre 'leer lista' vs 'leer uno' si se desea mayor granularidad en el tracking de operaciones."
+    }
+  ]
+}

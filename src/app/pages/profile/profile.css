@@ -213,3 +213,11 @@
   font-weight: 600;
   color: var(--p-surface-0);
 }
+
+/* Password dialog */
+.password-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 0.5rem 0;
+}

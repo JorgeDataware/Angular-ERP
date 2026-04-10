@@ -34,6 +34,7 @@
   align-items: center;
   justify-content: center;
   gap: 0.25rem;
+  flex-wrap: wrap;
 }
 
 /* Empty state */
@@ -177,119 +178,32 @@
   color: var(--p-text-color);
 }
 
-.no-data {
-  color: var(--p-surface-500);
-  font-size: 0.9rem;
-  font-style: italic;
-}
-
-/* Comments */
-.comments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.comment-item {
-  padding: 0.75rem;
-  background: var(--p-surface-50);
-  border-radius: 8px;
-  border-left: 3px solid var(--p-primary-color);
-  color: var(--p-surface-900);
-}
-
-.comment-header {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
-  font-size: 0.85rem;
-  color: var(--p-surface-900);
-}
-
-.comment-header strong {
-  color: var(--p-surface-900);
-}
-
-.comment-date {
-  color: var(--p-surface-500);
-}
-
-.comment-text {
+.detail-comments-text {
   color: var(--p-text-muted-color);
-  font-size: 0.9rem;
+  line-height: 1.6;
   margin: 0;
+  white-space: pre-wrap;
 }
 
-.add-comment {
+/* Detail workflow actions */
+.detail-actions-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* Assign dialog */
+.assign-dialog-content {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 1rem;
-}
-
-.add-comment textarea {
-  width: 100%;
-}
-
-.add-comment p-button {
-  align-self: flex-end;
-}
-
-/* History */
-.history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.history-item {
-  display: flex;
-  align-items: flex-start;
   gap: 0.75rem;
   padding: 0.5rem 0;
 }
 
-.history-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--p-surface-100);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.history-icon i {
-  font-size: 0.8rem;
-  color: var(--p-surface-600);
-}
-
-.history-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-}
-
-.history-date {
-  font-size: 0.8rem;
-  color: var(--p-surface-500);
-}
-
-.history-text {
+.assign-dialog-content label {
+  font-weight: 600;
   font-size: 0.9rem;
   color: var(--p-surface-700);
-}
-
-.history-old {
-  color: var(--p-red-500);
-  text-decoration: line-through;
-}
-
-.history-new {
-  color: var(--p-green-600);
-  font-weight: 600;
 }
 
 /* Toolbar start layout */
@@ -337,10 +251,10 @@
   align-items: flex-end;
 }
 
-/* Kanban Board */
+/* Kanban Board — 3 columns */
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 1rem;
   min-height: 400px;
 }
@@ -363,19 +277,15 @@
   background: var(--p-surface-100);
 }
 
-.kanban-header-pendiente {
-  border-bottom-color: #f59e0b;
-}
-
-.kanban-header-en-progreso {
+.kanban-header-open {
   border-bottom-color: #3b82f6;
 }
 
-.kanban-header-en-revision {
-  border-bottom-color: #8b5cf6;
+.kanban-header-in-progress {
+  border-bottom-color: #f59e0b;
 }
 
-.kanban-header-finalizado {
+.kanban-header-closed {
   border-bottom-color: #22c55e;
 }
 
@@ -516,18 +426,10 @@
   font-size: 0.85rem;
 }
 
-/* History textarea */
-:host ::ng-deep .history-textarea.p-textarea {
-  width: 100%;
-  background: var(--p-surface-50) !important;
-  color: var(--p-surface-900) !important;
-  font-family: 'Courier New', monospace;
-  font-size: 0.85rem;
-  line-height: 1.5;
-  border: 1px solid var(--p-surface-200);
-  border-radius: 8px;
-  cursor: default;
-  resize: none;
+.no-data {
+  color: var(--p-surface-500);
+  font-size: 0.9rem;
+  font-style: italic;
 }
 
 /* Responsive */
@@ -566,5 +468,9 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+
+  .detail-actions-row {
+    flex-direction: column;
   }
 }

@@ -1,0 +1,1322 @@
+{
+  "module": "groups",
+  "endpoints": [
+    {
+      "id": "groups-get-all",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups",
+      "internalEndpoint": "/groups",
+      "httpMethod": "GET",
+      "summary": "Get groups",
+      "description": "Retrieves the list of groups.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Groups retrieved successfully.",
+          "whenItHappens": "When user is authenticated and has canRead_Groups permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Groups retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "Soporte",
+                "description": "Grupo de soporte técnico",
+                "owner": "Juan Pérez",
+                "status": 1
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EGWAU401",
+          "message": "Missing authentication token.",
+          "whenItHappens": "When no token is provided",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EGWAU401",
+            "message": "Missing authentication token.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGWFB403",
+          "message": "You do not have permission to perform this action.",
+          "whenItHappens": "When user doesn't have canRead_Groups permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGWFB403",
+            "message": "You do not have permission to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroups",
+        "Returns all groups in system",
+        "status field: 1=active, 0=inactive (inferred)",
+        "owner field shows owner's full name"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroups"
+      },
+      "frontendNotes": [
+        "Use for groups list/table",
+        "Display name, description, owner, status",
+        "Status 1=Active, 0=Inactive",
+        "Filter by status if needed",
+        "Click to navigate to group detail"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRRD200 = Success Group Service Read 200",
+        "Returns array of group objects",
+        "owner is string (user's name), not ID"
+      ]
+    },
+    {
+      "id": "groups-get-by-id",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId",
+      "internalEndpoint": "/groups/:groupId",
+      "httpMethod": "GET",
+      "summary": "Get group by id",
+      "description": "Retrieves the detail of a specific group by its id.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Group retrieved successfully.",
+          "whenItHappens": "When group exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Group retrieved successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "name": "Soporte",
+                "description": "Grupo de soporte técnico",
+                "createdByUserId": "00000000-0000-0000-0000-000000000001",
+                "owner": "Juan Pérez",
+                "status": 1,
+                "members": [
+                  {
+                    "id": "00000000-0000-0000-0000-000000000003",
+                    "userName": "mlopez",
+                    "completeName": "María López"
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroupById/{groupId}",
+        "Returns detailed group info including members list",
+        "Includes createdByUserId for ownership validation",
+        "members array contains user id, userName, and completeName"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroupById/{groupId}"
+      },
+      "frontendNotes": [
+        "Use for group detail page/modal",
+        "Show group info and members list",
+        "createdByUserId used to determine if current user is owner",
+        "Display members in table with userName and completeName",
+        "Use for checking ownership before edit/delete operations"
+      ],
+      "inferenceNotes": [
+        "OpCode EGRNF404 = Error Group Service Not Found 404",
+        "Includes members array not present in get-all",
+        "createdByUserId identifies the owner"
+      ]
+    },
+    {
+      "id": "groups-get-members",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/members",
+      "internalEndpoint": "/groups/:groupId/members",
+      "httpMethod": "GET",
+      "summary": "Get group members",
+      "description": "Retrieves the list of members of a specific group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID format)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRRD200",
+          "message": "Group members retrieved successfully.",
+          "whenItHappens": "When group exists and user has permission",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRRD200",
+            "message": "Group members retrieved successfully.",
+            "data": [
+              {
+                "id": "00000000-0000-0000-0000-000000000003",
+                "userName": "mlopez",
+                "completeName": "María López"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/GetGroupMembers/{groupId}",
+        "Returns only members list without group details",
+        "Alternative to getting full group with /groups/:groupId"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/GetGroupMembers/{groupId}"
+      },
+      "frontendNotes": [
+        "Use when only members list is needed",
+        "More efficient than fetching full group",
+        "Display members in dropdown for ticket assignment",
+        "Show userName and completeName"
+      ],
+      "inferenceNotes": [
+        "Returns same member structure as get-by-id endpoint",
+        "Lighter weight than full group fetch"
+      ]
+    },
+    {
+      "id": "groups-create",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups",
+      "internalEndpoint": "/groups",
+      "httpMethod": "POST",
+      "summary": "Create group",
+      "description": "Creates a new group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canCreate_Groups"],
+      "permissionNotes": "Requires canCreate_Groups permission.",
+      "ownershipRules": [
+        "Authenticated user becomes the group owner (inferred)"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["name", "description"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Group description"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "name": "Desarrollo",
+        "description": "Equipo de desarrollo de software"
+      },
+      "fieldsRequired": ["name", "description"],
+      "fieldsOptional": [],
+      "validationRules": ["name must be unique"],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "SGRCR201",
+          "message": "Group created successfully.",
+          "whenItHappens": "When group is created successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "SGRCR201",
+            "message": "Group created successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EGRBR400",
+          "message": "Invalid request payload.",
+          "whenItHappens": "When required fields are missing or invalid",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EGRBR400",
+            "message": "Invalid request payload.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "A group with the same name already exists.",
+          "whenItHappens": "When group name already exists",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "A group with the same name already exists.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/AddGroup",
+        "Group name must be unique",
+        "Authenticated user becomes owner",
+        "Group starts with active status (inferred)",
+        "Returns new group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/AddGroup"
+      },
+      "frontendNotes": [
+        "Use returned ID to redirect to group detail",
+        "Handle 409 with clear message about duplicate name",
+        "Refresh groups list after creation",
+        "Show success message with new group name"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRCR201 = Success Group Service Create 201",
+        "OpCode EGRBR400 = Error Group Service Bad Request 400",
+        "OpCode EGRCF409 = Error Group Service Conflict 409",
+        "Owner is set from JWT userId claim"
+      ]
+    },
+    {
+      "id": "groups-add-member",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/members",
+      "internalEndpoint": "/groups/members",
+      "httpMethod": "POST",
+      "summary": "Add group member",
+      "description": "Adds a user as member of a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can add members",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["groupId", "memberId"],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "description": "Group ID (UUID)"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "User ID to add as member (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+        "memberId": "00000000-0000-0000-0000-000000000005"
+      },
+      "fieldsRequired": ["groupId", "memberId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "groupId must be valid UUID",
+        "memberId must be valid UUID",
+        "group must be active",
+        "user must exist and be active (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRMB200",
+          "message": "Group member added successfully.",
+          "whenItHappens": "When member is added successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRMB200",
+            "message": "Group member added successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can add members.",
+          "whenItHappens": "When non-owner tries to add member",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can add members.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group was not found or is inactive.",
+          "whenItHappens": "When group is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group was not found or is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/AddMember",
+        "Only group owner can add members",
+        "Group must be active (status=1)",
+        "User must exist and be active",
+        "Cannot add duplicate members (inferred)",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/AddMember"
+      },
+      "frontendNotes": [
+        "Show user selection dropdown filtered by non-members",
+        "Handle 403 with clear ownership message",
+        "Refresh group members list after success",
+        "Disable if current user is not owner",
+        "Handle 409 for inactive group scenario"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRMB200 = Success Group Service Member 200",
+        "OpCode EGRFB403 = Error Group Service Forbidden 403",
+        "Ownership validated in microservice",
+        "Returns groupId, not memberId"
+      ]
+    },
+    {
+      "id": "groups-remove-member",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/members",
+      "internalEndpoint": "/groups/members",
+      "httpMethod": "DELETE",
+      "summary": "Remove group member",
+      "description": "Removes a user from a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can remove members",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["groupId", "memberId"],
+        "properties": {
+          "groupId": {
+            "type": "string",
+            "description": "Group ID (UUID)"
+          },
+          "memberId": {
+            "type": "string",
+            "description": "User ID to remove (UUID)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+        "memberId": "00000000-0000-0000-0000-000000000005"
+      },
+      "fieldsRequired": ["groupId", "memberId"],
+      "fieldsOptional": [],
+      "validationRules": [
+        "groupId must be valid UUID",
+        "memberId must be valid UUID",
+        "group must be active",
+        "member must exist in group"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRMB200",
+          "message": "Group member removed successfully.",
+          "whenItHappens": "When member is removed successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRMB200",
+            "message": "Group member removed successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can remove members.",
+          "whenItHappens": "When non-owner tries to remove member",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can remove members.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified member was not found in the group.",
+          "whenItHappens": "When memberId is not in the group",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified member was not found in the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group was not found or is inactive.",
+          "whenItHappens": "When group is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group was not found or is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/RemoveMember",
+        "Only group owner can remove members",
+        "Group must be active (status=1)",
+        "Member must exist in group",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group", "User"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/RemoveMember"
+      },
+      "frontendNotes": [
+        "Show remove button only for group owner",
+        "Confirm before removal",
+        "Handle 404 if member not in group",
+        "Refresh members list after success",
+        "Cannot remove owner (inferred - validate on frontend)"
+      ],
+      "inferenceNotes": [
+        "Same OpCode as add member (SGRMB200)",
+        "Different 404 message for not found member vs group",
+        "Ownership validated in microservice"
+      ]
+    },
+    {
+      "id": "groups-update",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId",
+      "internalEndpoint": "/groups/:groupId",
+      "httpMethod": "PATCH",
+      "summary": "Edit group",
+      "description": "Updates the data of a group. Only the group owner can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canUpdate_Groups"],
+      "permissionNotes": "Requires canUpdate_Groups permission at gateway level. Ownership validation in microservice.",
+      "ownershipRules": [
+        "Only group owner can edit group",
+        "Validated by microservice based on createdByUserId"
+      ],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID to update (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "value": "application/json",
+          "description": "Request body format"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Group name"
+          },
+          "description": {
+            "type": "string",
+            "description": "Group description"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "name": "Soporte Técnico",
+        "description": "Equipo de soporte técnico actualizado"
+      },
+      "fieldsRequired": [],
+      "fieldsOptional": ["name", "description"],
+      "validationRules": [
+        "name must be unique if changed",
+        "group must be active",
+        "at least one field should be provided (inferred)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRUP200",
+          "message": "Group updated successfully.",
+          "whenItHappens": "When group is updated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRUP200",
+            "message": "Group updated successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner can edit the group.",
+          "whenItHappens": "When non-owner tries to edit",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner can edit the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The specified group is inactive.",
+          "whenItHappens": "When group status is inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The specified group is inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/EditGroup/{groupId}",
+        "Only owner can edit",
+        "Group must be active",
+        "Name must remain unique if changed",
+        "Returns group ID"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/EditGroup/{groupId}"
+      },
+      "frontendNotes": [
+        "Show edit form only to group owner",
+        "Pre-populate form with current values",
+        "Handle 409 for inactive group",
+        "Refresh group detail after update",
+        "All fields optional (send only changed)"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRUP200 = Success Group Service Update 200",
+        "Uses PATCH method (partial update)",
+        "Inactive groups cannot be edited"
+      ]
+    },
+    {
+      "id": "groups-deactivate",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/deactivate",
+      "internalEndpoint": "/groups/:groupId/deactivate",
+      "httpMethod": "PATCH",
+      "summary": "Deactivate group",
+      "description": "Performs a logical deactivation of a group. The owner or superadmin can perform this operation.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canDelete_Groups"],
+      "permissionNotes": "Requires canDelete_Groups permission at gateway level. Additional ownership validation in microservice.",
+      "ownershipRules": [
+        "Group owner can deactivate own group",
+        "Superadmin can deactivate any group",
+        "Validated by microservice"
+      ],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID to deactivate (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID", "group must be active"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SGRDL200",
+          "message": "Group deactivated successfully.",
+          "whenItHappens": "When group is deactivated successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SGRDL200",
+            "message": "Group deactivated successfully.",
+            "data": [
+              {
+                "id": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EGRFB403",
+          "message": "Only the group owner or superadmin can deactivate the group.",
+          "whenItHappens": "When non-owner/non-admin tries to deactivate",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EGRFB403",
+            "message": "Only the group owner or superadmin can deactivate the group.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EGRNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EGRNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 409,
+          "intOpCode": "EGRCF409",
+          "message": "The group is already inactive.",
+          "whenItHappens": "When group is already inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 409,
+            "intOpCode": "EGRCF409",
+            "message": "The group is already inactive.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Groups microservice at /api/Group/{groupId}/deactivate",
+        "Logical deletion (soft delete)",
+        "Owner or superadmin can deactivate",
+        "Cannot deactivate already inactive group",
+        "Sets group status to 0 (inactive)"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["GROUPS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/api/Group/{groupId}/deactivate"
+      },
+      "frontendNotes": [
+        "Show confirmation dialog before deactivation",
+        "Show deactivate button only to owner or admin",
+        "Handle 409 for already inactive groups",
+        "Refresh groups list after deactivation",
+        "Consider filtering inactive groups in list",
+        "Deactivated groups cannot have new tickets (inferred)"
+      ],
+      "inferenceNotes": [
+        "OpCode SGRDL200 = Success Group Service Delete/Deactivate 200",
+        "Soft delete, not hard delete",
+        "Superadmin role determined by microservice"
+      ]
+    },
+    {
+      "id": "groups-get-tickets",
+      "serviceName": "ERP-API-Gateway",
+      "moduleName": "groups",
+      "controllerName": "groupsRoutes",
+      "gatewayEndpoint": "/groups/:groupId/tickets",
+      "internalEndpoint": "/groups/:groupId/tickets",
+      "httpMethod": "GET",
+      "summary": "Get tickets of a group",
+      "description": "Retrieves all tickets that belong to a specific group.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["canRead_Groups"],
+      "permissionNotes": "Requires canRead_Groups permission. Proxies to Tickets microservice.",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "groupId",
+          "type": "string",
+          "required": true,
+          "description": "Group ID (UUID)"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "value": "Bearer {token}",
+          "description": "JWT token for authentication"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Alternative to Authorization header"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsRequired": [],
+      "fieldsOptional": [],
+      "validationRules": ["groupId must be valid UUID"],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "STKRD200",
+          "message": "Group tickets retrieved successfully.",
+          "whenItHappens": "When tickets are retrieved successfully",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "STKRD200",
+            "message": "Group tickets retrieved successfully.",
+            "data": [
+              {
+                "id": "f92b1d7d-7ed1-4f63-8d55-671d9f2b7980",
+                "title": "Error al guardar solicitud",
+                "description": "Aparece error 500 al guardar.",
+                "status": 1,
+                "priority": 3,
+                "groupId": "019d5a1b-cee1-7e2d-b1b0-79a8c75197e3",
+                "groupName": "Soporte"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "ETKNF404",
+          "message": "The specified group was not found.",
+          "whenItHappens": "When groupId doesn't exist",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (empty)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "ETKNF404",
+            "message": "The specified group was not found.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Proxies to Tickets microservice at /tickets/group/{groupId}",
+        "Returns all tickets for specified group",
+        "Includes basic ticket info",
+        "status: 1=Open, 2=InProgress, 3=Closed (inferred)",
+        "priority: 1=Low, 2=Medium, 3=High (inferred)"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": ["TICKETS_SERVICE_URL"],
+        "helpers": ["app.authenticate", "app.requirePermission"],
+        "entities": ["Ticket", "Group"],
+        "claims": ["userId", "permissions"],
+        "microserviceEndpoint": "/tickets/group/{groupId}"
+      },
+      "frontendNotes": [
+        "Use for group detail page to show tickets",
+        "Display tickets in table/kanban board",
+        "Filter by status/priority",
+        "Click ticket to view detail",
+        "Useful for group-specific ticket views",
+        "OpCode is from Tickets service (STKRD200)"
+      ],
+      "inferenceNotes": [
+        "OpCode ETKNF404 = Error Ticket Service Not Found 404",
+        "OpCode STKRD200 = Success Ticket Service Read 200",
+        "This endpoint is in groups routes but proxies to Tickets service",
+        "Validates canRead_Groups, not canRead_Tickets"
+      ]
+    }
+  ]
+}

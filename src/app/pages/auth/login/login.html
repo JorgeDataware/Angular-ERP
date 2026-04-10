@@ -30,6 +30,7 @@
           name="email"
           class="w-full"
           required
+          [disabled]="loading()"
         />
       </div>
 
@@ -46,6 +47,7 @@
           styleClass="w-full"
           inputStyleClass="w-full"
           required
+          [disabled]="loading()"
         />
       </div>
 
@@ -65,27 +67,16 @@
 
       <p-button
         type="submit"
-        label="Iniciar Sesion"
-        icon="pi pi-sign-in"
+        [label]="loading() ? 'Iniciando sesion...' : 'Iniciar Sesion'"
+        [icon]="loading() ? 'pi pi-spinner pi-spin' : 'pi pi-sign-in'"
         styleClass="w-full"
+        [disabled]="loading()"
       />
 
       <div class="credentials-hint">
         <small>
           <i class="pi pi-info-circle"></i>
-          <strong>Usuario 1:</strong> superadmin&#64;erp.com / Super&#64;2025!
-        </small>
-        <small>
-          <i class="pi pi-info-circle"></i>
-          <strong>Usuario 2:</strong> lider&#64;erp.com / Lider&#64;2025!
-        </small>
-        <small>
-          <i class="pi pi-info-circle"></i>
-          <strong>Usuario 3:</strong> dev&#64;erp.com / Devel&#64;2025!
-        </small>
-        <small>
-          <i class="pi pi-info-circle"></i>
-          <strong>Usuario 4:</strong> usuario&#64;erp.com / User&#64;2025!
+          Ingresa las credenciales proporcionadas por tu administrador.
         </small>
       </div>
     </form>

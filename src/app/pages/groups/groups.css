@@ -95,6 +95,10 @@
   gap: 1.25rem;
 }
 
+.form-grid-single {
+  grid-template-columns: 1fr;
+}
+
 .field {
   display: flex;
   flex-direction: column;

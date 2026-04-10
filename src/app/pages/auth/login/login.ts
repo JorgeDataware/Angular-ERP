@@ -1,6 +1,7 @@
 import { Component, signal, inject } from '@angular/core';
 import { RouterLink, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { ButtonModule } from 'primeng/button';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
@@ -37,6 +38,7 @@ export class Login {
   password = signal('');
   rememberMe = signal(false);
   errorMessage = signal('');
+  loading = signal(false);
 
   credentialsHint = this.authService.getCredentialsHint();
 
@@ -55,34 +57,44 @@ export class Login {
       return;
     }
 
-    // Validar credenciales via AuthService
-    const user = this.authService.login(this.email(), this.password());
+    this.loading.set(true);
 
-    if (user) {
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Exito',
-        detail: 'Inicio de sesion exitoso',
-        life: 3000
-      });
+    // Llamada HTTP real al API Gateway
+    this.authService.login(this.email(), this.password()).subscribe({
+      next: (user) => {
+        this.loading.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Exito',
+          detail: 'Inicio de sesion exitoso',
+          life: 3000
+        });
 
-      console.log('Login exitoso:', {
-        email: this.email(),
-        rememberMe: this.rememberMe(),
-      });
+        // Redirigir al dashboard de grupos despues de login exitoso
+        setTimeout(() => {
+          this.router.navigate(['/groups']);
+        }, 1500);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.loading.set(false);
 
-      // Redirigir al dashboard de grupos despues de login exitoso
-      setTimeout(() => {
-        this.router.navigate(['/groups']);
-      }, 1500);
-    } else {
-      this.errorMessage.set('Credenciales invalidas. Usa las credenciales de prueba.');
-      this.messageService.add({
-        severity: 'error',
-        summary: 'Error de autenticacion',
-        detail: 'Credenciales invalidas',
-        life: 3000
-      });
-    }
+        let detail = 'Credenciales invalidas';
+        if (error.error?.message) {
+          detail = error.error.message;
+        } else if (error.status === 0) {
+          detail = 'No se pudo conectar con el servidor. Verifica que el API Gateway esté activo.';
+        } else if (error.status === 401) {
+          detail = 'Credenciales invalidas. Verifica tu correo y contrasena.';
+        }
+
+        this.errorMessage.set(detail);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error de autenticacion',
+          detail,
+          life: 5000
+        });
+      },
+    });
   }
 }

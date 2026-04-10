@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject } from '@angular/core';
+import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -16,7 +16,7 @@ import { IconFieldModule } from 'primeng/iconfield';
 import { InputIconModule } from 'primeng/inputicon';
 import { TooltipModule } from 'primeng/tooltip';
 import { MessageService, ConfirmationService } from 'primeng/api';
-import { Group } from '../../core/models/group';
+import { Group, GroupBackend } from '../../core/models/group';
 import { AuthService } from '../../core/services/auth.service';
 import { GroupService } from '../../core/services/group.service';
 import { HasPermissionDirective } from '../../shared/directives/has-permission.directive';
@@ -45,7 +45,7 @@ import { HasPermissionDirective } from '../../shared/directives/has-permission.d
   templateUrl: './groups.html',
   styleUrl: './groups.css',
 })
-export class Groups {
+export class Groups implements OnInit {
   private messageService = inject(MessageService);
   private confirmationService = inject(ConfirmationService);
   private authService = inject(AuthService);
@@ -59,24 +59,23 @@ export class Groups {
 
   // --- Data (from service) ---
   groups = this.groupService.groups;
+  loading = this.groupService.loading;
 
   // --- Dialog state ---
   dialogVisible = signal(false);
-  deleteDialogVisible = signal(false);
   isEditMode = signal(false);
   submitted = signal(false);
+  saving = signal(false);
 
   // --- Form fields (bound to dialog) ---
-  editId = signal<number | null>(null);
-  editNivel = signal('');
-  editAutor = signal('');
-  editNombre = signal('');
-  editIntegrantes = signal<number | null>(null);
-  editTickets = signal<number | null>(null);
-  editDescripcion = signal('');
+  // Backend only accepts name + description for create/edit.
+  // Owner is auto-set from JWT. Status not editable.
+  editId = signal<string | null>(null);
+  editName = signal('');
+  editDescription = signal('');
 
-  // --- Group pending deletion ---
-  groupToDelete = signal<Group | null>(null);
+  // --- Group pending deactivation ---
+  groupToDeactivate = signal<GroupBackend | null>(null);
 
   // --- Search ---
   searchValue = signal('');
@@ -87,24 +86,17 @@ export class Groups {
     if (!term) return this.groups();
     return this.groups().filter(
       (g) =>
-        g.nombre.toLowerCase().includes(term) ||
-        g.autor.toLowerCase().includes(term) ||
-        g.nivel.toLowerCase().includes(term) ||
-        g.descripcion.toLowerCase().includes(term)
+        g.name.toLowerCase().includes(term) ||
+        g.owner.toLowerCase().includes(term) ||
+        g.description.toLowerCase().includes(term)
     );
   });
 
   // --- Validation ---
   isFormValid = computed(() => {
     return (
-      this.editNivel().trim().length > 0 &&
-      this.editAutor().trim().length > 0 &&
-      this.editNombre().trim().length > 0 &&
-      this.editIntegrantes() !== null &&
-      this.editIntegrantes()! >= 0 &&
-      this.editTickets() !== null &&
-      this.editTickets()! >= 0 &&
-      this.editDescripcion().trim().length > 0
+      this.editName().trim().length > 0 &&
+      this.editDescription().trim().length > 0
     );
   });
 
@@ -112,6 +104,20 @@ export class Groups {
   dialogTitle = computed(() =>
     this.isEditMode() ? 'Editar Grupo' : 'Nuevo Grupo'
   );
+
+  // --- Lifecycle ---
+  ngOnInit(): void {
+    this.groupService.loadGroups().subscribe({
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err?.error?.message || 'No se pudieron cargar los grupos',
+          life: 5000,
+        });
+      },
+    });
+  }
 
   // --- Actions ---
   openNew(): void {
@@ -121,87 +127,113 @@ export class Groups {
     this.dialogVisible.set(true);
   }
 
-  editGroup(group: Group): void {
+  editGroup(group: GroupBackend): void {
     this.isEditMode.set(true);
     this.submitted.set(false);
     this.editId.set(group.id);
-    this.editNivel.set(group.nivel);
-    this.editAutor.set(group.autor);
-    this.editNombre.set(group.nombre);
-    this.editIntegrantes.set(group.integrantes);
-    this.editTickets.set(group.tickets);
-    this.editDescripcion.set(group.descripcion);
+    this.editName.set(group.name);
+    this.editDescription.set(group.description);
     this.dialogVisible.set(true);
   }
 
-  confirmDelete(group: Group): void {
-    this.groupToDelete.set(group);
+  confirmDeactivate(group: GroupBackend): void {
+    this.groupToDeactivate.set(group);
     this.confirmationService.confirm({
-      message: `¿Estas seguro de que deseas eliminar el grupo "${group.nombre}"?`,
-      header: 'Confirmar Eliminacion',
+      message: `¿Estas seguro de que deseas desactivar el grupo "${group.name}"?`,
+      header: 'Confirmar Desactivacion',
       icon: 'pi pi-exclamation-triangle',
-      acceptLabel: 'Eliminar',
+      acceptLabel: 'Desactivar',
       rejectLabel: 'Cancelar',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.deleteGroup(group);
+        this.deactivateGroup(group);
       },
     });
   }
 
-  deleteGroup(group: Group): void {
-    this.groupService.deleteGroup(group.id);
-    this.messageService.add({
-      severity: 'success',
-      summary: 'Eliminado',
-      detail: `El grupo "${group.nombre}" ha sido eliminado`,
-      life: 3000,
+  deactivateGroup(group: GroupBackend): void {
+    this.groupService.deactivateGroup(group.id).subscribe({
+      next: () => {
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Desactivado',
+          detail: `El grupo "${group.name}" ha sido desactivado`,
+          life: 3000,
+        });
+        this.groupToDeactivate.set(null);
+      },
+      error: (err) => {
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err?.error?.message || 'No se pudo desactivar el grupo',
+          life: 5000,
+        });
+        this.groupToDeactivate.set(null);
+      },
     });
-    this.groupToDelete.set(null);
   }
 
   saveGroup(): void {
     this.submitted.set(true);
-
     if (!this.isFormValid()) return;
 
+    this.saving.set(true);
+
     if (this.isEditMode()) {
-      // Update
       const id = this.editId()!;
       this.groupService.updateGroup(id, {
-        nivel: this.editNivel().trim(),
-        autor: this.editAutor().trim(),
-        nombre: this.editNombre().trim(),
-        integrantes: this.editIntegrantes()!,
-        tickets: this.editTickets()!,
-        descripcion: this.editDescripcion().trim(),
-      });
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Actualizado',
-        detail: `El grupo "${this.editNombre().trim()}" ha sido actualizado`,
-        life: 3000,
+        name: this.editName().trim(),
+        description: this.editDescription().trim(),
+      }).subscribe({
+        next: () => {
+          this.saving.set(false);
+          this.dialogVisible.set(false);
+          this.resetForm();
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Actualizado',
+            detail: `El grupo "${this.editName().trim()}" ha sido actualizado`,
+            life: 3000,
+          });
+        },
+        error: (err) => {
+          this.saving.set(false);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: err?.error?.message || 'No se pudo actualizar el grupo',
+            life: 5000,
+          });
+        },
       });
     } else {
-      // Create
-      const newGroup = this.groupService.addGroup({
-        nivel: this.editNivel().trim(),
-        autor: this.editAutor().trim(),
-        nombre: this.editNombre().trim(),
-        integrantes: this.editIntegrantes()!,
-        tickets: this.editTickets()!,
-        descripcion: this.editDescripcion().trim(),
-      });
-      this.messageService.add({
-        severity: 'success',
-        summary: 'Creado',
-        detail: `El grupo "${newGroup.nombre}" ha sido creado`,
-        life: 3000,
+      this.groupService.createGroup({
+        name: this.editName().trim(),
+        description: this.editDescription().trim(),
+      }).subscribe({
+        next: () => {
+          this.saving.set(false);
+          this.dialogVisible.set(false);
+          this.resetForm();
+          this.messageService.add({
+            severity: 'success',
+            summary: 'Creado',
+            detail: `El grupo "${this.editName().trim()}" ha sido creado`,
+            life: 3000,
+          });
+        },
+        error: (err) => {
+          this.saving.set(false);
+          this.messageService.add({
+            severity: 'error',
+            summary: 'Error',
+            detail: err?.error?.message || 'No se pudo crear el grupo',
+            life: 5000,
+          });
+        },
       });
     }
-
-    this.dialogVisible.set(false);
-    this.resetForm();
   }
 
   hideDialog(): void {
@@ -210,39 +242,30 @@ export class Groups {
   }
 
   // --- Navigation ---
-  goToUsers(group: Group): void {
+  goToUsers(group: GroupBackend): void {
     this.router.navigate(['/groups', group.id, 'users'], {
-      queryParams: { groupName: group.nombre },
+      queryParams: { groupName: group.name },
     });
   }
 
-  goToTicketDashboard(group: Group): void {
+  goToTicketDashboard(group: GroupBackend): void {
     this.router.navigate(['/ticket-dashboard', group.id], {
-      queryParams: { groupName: group.nombre },
+      queryParams: { groupName: group.name },
     });
   }
 
   // --- Helpers ---
   private resetForm(): void {
     this.editId.set(null);
-    this.editNivel.set('');
-    this.editAutor.set('');
-    this.editNombre.set('');
-    this.editIntegrantes.set(null);
-    this.editTickets.set(null);
-    this.editDescripcion.set('');
+    this.editName.set('');
+    this.editDescription.set('');
   }
 
-  getNivelSeverity(nivel: string): 'success' | 'warn' | 'danger' | 'info' {
-    switch (nivel.toLowerCase()) {
-      case 'alto':
-        return 'danger';
-      case 'medio':
-        return 'warn';
-      case 'bajo':
-        return 'success';
-      default:
-        return 'info';
-    }
+  getStatusLabel(status: number): string {
+    return this.groupService.getStatusLabel(status);
+  }
+
+  getStatusSeverity(status: number): 'success' | 'danger' {
+    return this.groupService.getStatusSeverity(status);
   }
 }

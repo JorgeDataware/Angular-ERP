@@ -35,53 +35,39 @@
     [paginator]="true"
     [rows]="10"
     [rowsPerPageOptions]="[5, 10, 25]"
-    [tableStyle]="{ 'min-width': '70rem' }"
+    [tableStyle]="{ 'min-width': '60rem' }"
     [rowHover]="true"
     [showCurrentPageReport]="true"
     currentPageReportTemplate="Mostrando {first} a {last} de {totalRecords} usuarios"
     dataKey="id"
     styleClass="p-datatable-striped"
+    [loading]="loading()"
   >
     <ng-template #header>
       <tr>
-        <th pSortableColumn="id" style="min-width: 5rem">
-          ID <p-sortIcon field="id" />
+        <th pSortableColumn="userName" style="min-width: 8rem">
+          Usuario <p-sortIcon field="userName" />
         </th>
-        <th pSortableColumn="username" style="min-width: 8rem">
-          Usuario <p-sortIcon field="username" />
-        </th>
-        <th pSortableColumn="fullName" style="min-width: 12rem">
-          Nombre completo <p-sortIcon field="fullName" />
+        <th style="min-width: 12rem">
+          Nombre completo
         </th>
         <th pSortableColumn="email" style="min-width: 12rem">
           Email <p-sortIcon field="email" />
         </th>
-        <th pSortableColumn="phone" style="min-width: 8rem">
-          Telefono <p-sortIcon field="phone" />
-        </th>
-        <th pSortableColumn="groupId" style="min-width: 5rem">
-          Grupo <p-sortIcon field="groupId" />
-        </th>
-        <th style="min-width: 5rem">Estado</th>
+        <th style="min-width: 10rem">Permisos</th>
         <th style="min-width: 10rem; text-align: center">Acciones</th>
       </tr>
     </ng-template>
 
     <ng-template #body let-user>
       <tr>
-        <td>{{ user.id }}</td>
         <td>
-          <span class="user-username">{{ user.username }}</span>
+          <span class="user-username">{{ user.userName }}</span>
         </td>
-        <td>{{ user.fullName }}</td>
+        <td>{{ getFullName(user) }}</td>
         <td>{{ user.email }}</td>
-        <td>{{ user.phone }}</td>
-        <td>{{ user.groupId }}</td>
         <td>
-          <p-tag
-            [value]="user.active ? 'Activo' : 'Inactivo'"
-            [severity]="user.active ? 'success' : 'danger'"
-          />
+          <span class="permissions-count">{{ user.permissions?.length || 0 }} permisos</span>
         </td>
         <td class="actions-cell">
           <p-button
@@ -107,7 +93,7 @@
             [rounded]="true"
             severity="danger"
             [text]="true"
-            pTooltip="Eliminar"
+            pTooltip="Desactivar"
             tooltipPosition="top"
             (onClick)="confirmDelete(user)"
           />
@@ -117,7 +103,7 @@
 
     <ng-template #emptymessage>
       <tr>
-        <td colspan="8" class="empty-message">
+        <td colspan="5" class="empty-message">
           <i class="pi pi-users empty-icon"></i>
           <span>No se encontraron usuarios</span>
         </td>
@@ -141,33 +127,65 @@
     <div class="form-grid">
       <!-- Username -->
       <div class="field">
-        <label for="username">Usuario <span class="required">*</span></label>
+        <label for="userName">Usuario <span class="required">*</span></label>
         <input
           pInputText
-          id="username"
-          [ngModel]="editUsername()"
-          (ngModelChange)="editUsername.set($event)"
+          id="userName"
+          [ngModel]="editUserName()"
+          (ngModelChange)="editUserName.set($event)"
           placeholder="Nombre de usuario"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editUsername().trim() }"
+          [disabled]="saving()"
+          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editUserName().trim() }"
         />
-        @if (submitted() && !editUsername().trim()) {
+        @if (submitted() && !editUserName().trim()) {
           <small class="field-error">El usuario es requerido.</small>
         }
       </div>
 
-      <!-- Full Name -->
+      <!-- First Name -->
       <div class="field">
-        <label for="fullName">Nombre completo <span class="required">*</span></label>
+        <label for="firstName">Nombre <span class="required">*</span></label>
         <input
           pInputText
-          id="fullName"
-          [ngModel]="editFullName()"
-          (ngModelChange)="editFullName.set($event)"
-          placeholder="Nombre completo"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editFullName().trim() }"
+          id="firstName"
+          [ngModel]="editFirstName()"
+          (ngModelChange)="editFirstName.set($event)"
+          placeholder="Nombre"
+          [disabled]="saving()"
+          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editFirstName().trim() }"
         />
-        @if (submitted() && !editFullName().trim()) {
+        @if (submitted() && !editFirstName().trim()) {
           <small class="field-error">El nombre es requerido.</small>
+        }
+      </div>
+
+      <!-- Middle Name -->
+      <div class="field">
+        <label for="middleName">Segundo nombre</label>
+        <input
+          pInputText
+          id="middleName"
+          [ngModel]="editMiddleName()"
+          (ngModelChange)="editMiddleName.set($event)"
+          placeholder="Segundo nombre (opcional)"
+          [disabled]="saving()"
+        />
+      </div>
+
+      <!-- Last Name -->
+      <div class="field">
+        <label for="lastName">Apellido <span class="required">*</span></label>
+        <input
+          pInputText
+          id="lastName"
+          [ngModel]="editLastName()"
+          (ngModelChange)="editLastName.set($event)"
+          placeholder="Apellido"
+          [disabled]="saving()"
+          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editLastName().trim() }"
+        />
+        @if (submitted() && !editLastName().trim()) {
+          <small class="field-error">El apellido es requerido.</small>
         }
       </div>
 
@@ -180,6 +198,7 @@
           [ngModel]="editEmail()"
           (ngModelChange)="editEmail.set($event)"
           placeholder="Correo electronico"
+          [disabled]="saving()"
           [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editEmail().trim() }"
         />
         @if (submitted() && !editEmail().trim()) {
@@ -187,67 +206,25 @@
         }
       </div>
 
-      <!-- Phone -->
-      <div class="field">
-        <label for="phone">Telefono <span class="required">*</span></label>
-        <input
-          pInputText
-          id="phone"
-          [ngModel]="editPhone()"
-          (ngModelChange)="editPhone.set($event)"
-          placeholder="Telefono"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editPhone().trim() }"
-        />
-        @if (submitted() && !editPhone().trim()) {
-          <small class="field-error">El telefono es requerido.</small>
-        }
-      </div>
-
-      <!-- Address -->
-      <div class="field field-full">
-        <label for="address">Direccion <span class="required">*</span></label>
-        <input
-          pInputText
-          id="address"
-          [ngModel]="editAddress()"
-          (ngModelChange)="editAddress.set($event)"
-          placeholder="Direccion"
-          [ngClass]="{ 'ng-invalid ng-dirty': submitted() && !editAddress().trim() }"
-        />
-        @if (submitted() && !editAddress().trim()) {
-          <small class="field-error">La direccion es requerida.</small>
-        }
-      </div>
-
-      <!-- Group -->
-      <div class="field">
-        <label for="groupId">Grupo</label>
-        <p-select
-          id="groupId"
-          [options]="groupOptions()"
-          [ngModel]="editGroupId()"
-          (ngModelChange)="editGroupId.set($event)"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Seleccionar grupo"
-          styleClass="w-full"
-        />
-      </div>
-
-      <!-- Active -->
-      <div class="field">
-        <label for="active">Estado</label>
-        <p-select
-          id="active"
-          [options]="activeOptions"
-          [ngModel]="editActive()"
-          (ngModelChange)="editActive.set($event)"
-          optionLabel="label"
-          optionValue="value"
-          placeholder="Estado"
-          styleClass="w-full"
-        />
-      </div>
+      <!-- Password (solo al crear) -->
+      @if (!isEditMode()) {
+        <div class="field">
+          <label for="password">Contrasena <span class="required">*</span></label>
+          <p-password
+            id="password"
+            [ngModel]="editPassword()"
+            (ngModelChange)="editPassword.set($event)"
+            [toggleMask]="true"
+            [feedback]="false"
+            [disabled]="saving()"
+            styleClass="w-full"
+            inputStyleClass="w-full"
+          />
+          @if (submitted() && !editPassword().trim()) {
+            <small class="field-error">La contrasena es requerida.</small>
+          }
+        </div>
+      }
     </div>
   </div>
 
@@ -257,11 +234,13 @@
       icon="pi pi-times"
       severity="secondary"
       [text]="true"
+      [disabled]="saving()"
       (onClick)="hideDialog()"
     />
     <p-button
       label="Guardar"
       icon="pi pi-check"
+      [loading]="saving()"
       (onClick)="saveUser()"
     />
   </ng-template>
@@ -284,30 +263,27 @@
       <span>{{ permissionsUserName() }}</span>
     </div>
 
-    <div class="permissions-table">
-      <div class="permissions-header-row">
-        <div class="permissions-module-header">Modulo</div>
-        @for (action of permissionActions; track action.key) {
-          <div class="permissions-action-header">{{ action.label }}</div>
-        }
-      </div>
-
-      @for (module of permissionModules; track module.key) {
-        <div class="permissions-row">
-          <div class="permissions-module-cell">
-            <i [class]="module.icon"></i>
-            <span>{{ module.label }}</span>
-          </div>
-          @for (action of permissionActions; track action.key) {
-            <div class="permissions-action-cell">
-              <p-checkbox
-                [ngModel]="getPermission(module.key, action.key)"
-                (ngModelChange)="setPermission(module.key, action.key, $event)"
-                [binary]="true"
-              />
-            </div>
-          }
+    <div class="permissions-list">
+      @if (availablePermissions().length === 0) {
+        <div class="permissions-empty">
+          <i class="pi pi-info-circle"></i>
+          <span>No se pudieron cargar los permisos disponibles.</span>
         </div>
+      } @else {
+        @for (perm of availablePermissions(); track perm.id) {
+          <div class="permissions-item">
+            <p-checkbox
+              [ngModel]="isPermissionSelected(perm.id)"
+              (ngModelChange)="togglePermission(perm.id, $event)"
+              [binary]="true"
+              [inputId]="'perm-' + perm.id"
+              [disabled]="savingPermissions()"
+            />
+            <label [for]="'perm-' + perm.id" class="permission-label">
+              {{ perm.name }}
+            </label>
+          </div>
+        }
       }
     </div>
   </div>
@@ -318,11 +294,13 @@
       icon="pi pi-times"
       severity="secondary"
       [text]="true"
+      [disabled]="savingPermissions()"
       (onClick)="hidePermissionsDialog()"
     />
     <p-button
       label="Guardar"
       icon="pi pi-check"
+      [loading]="savingPermissions()"
       (onClick)="savePermissions()"
     />
   </ng-template>

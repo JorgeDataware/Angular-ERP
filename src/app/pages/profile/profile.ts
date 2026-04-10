@@ -1,4 +1,4 @@
-import { Component, signal, computed, inject } from '@angular/core';
+import { Component, signal, computed, inject, OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { InputTextModule } from 'primeng/inputtext';
 import { PasswordModule } from 'primeng/password';
@@ -6,14 +6,16 @@ import { CheckboxModule } from 'primeng/checkbox';
 import { ButtonModule } from 'primeng/button';
 import { ToastModule } from 'primeng/toast';
 import { MessageModule } from 'primeng/message';
+import { DialogModule } from 'primeng/dialog';
 import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { TagModule } from 'primeng/tag';
 import { TableModule } from 'primeng/table';
 import { TooltipModule } from 'primeng/tooltip';
 import { MessageService, ConfirmationService } from 'primeng/api';
 import { AuthService } from '../../core/services/auth.service';
+import { UserService } from '../../core/services/user.service';
 import { TicketService } from '../../core/services/ticket.service';
-import { Ticket } from '../../core/models/ticket';
+import { Ticket, TicketBackend, TicketStatusBackend, TicketPriorityBackend, TagSeverity, TICKET_STATUS_LABELS, TICKET_STATUS_SEVERITY, TICKET_PRIORITY_LABELS, TICKET_PRIORITY_SEVERITY } from '../../core/models/ticket';
 
 @Component({
   selector: 'app-profile',
@@ -25,6 +27,7 @@ import { Ticket } from '../../core/models/ticket';
     ButtonModule,
     ToastModule,
     MessageModule,
+    DialogModule,
     ConfirmDialogModule,
     TagModule,
     TableModule,
@@ -34,9 +37,10 @@ import { Ticket } from '../../core/models/ticket';
   templateUrl: './profile.html',
   styleUrl: './profile.css',
 })
-export class Profile {
+export class Profile implements OnInit {
   private readonly SPECIAL_CHARS = '!@#$%^&*';
   private authService = inject(AuthService);
+  private userService = inject(UserService);
   private ticketService = inject(TicketService);
 
   // --- Tickets assigned to current user ---
@@ -44,52 +48,61 @@ export class Profile {
     const user = this.authService.currentUser();
     if (!user) return [];
     return this.ticketService.tickets().filter(
-      (t) => t.asignadoA === user.fullName
+      (t) => t.assignedUserName === this.authService.fullName()
     );
   });
 
-  // --- Datos de perfil (simulados) ---
-  username = signal('admin');
-  fullName = signal('Administrador ERP');
-  email = signal('admin@erp.com');
-  phone = signal('1234567890');
-  address = signal('Calle Principal 123, Ciudad');
-  password = signal('Admin@2025!');
-  confirmPassword = signal('Admin@2025!');
-  isAdult = signal(true);
-  acceptTerms = signal(true);
+  // --- Datos de perfil (cargados desde GET /users/me) ---
+  userName = signal('');
+  firstName = signal('');
+  middleName = signal('');
+  lastName = signal('');
+  email = signal('');
+
+  // --- Password change fields ---
+  currentPassword = signal('');
+  newPassword = signal('');
+  confirmNewPassword = signal('');
 
   // --- Backup para cancelar edicion ---
   private backup = {
-    username: '',
-    fullName: '',
+    userName: '',
+    firstName: '',
+    middleName: '',
+    lastName: '',
     email: '',
-    phone: '',
-    address: '',
-    password: '',
-    confirmPassword: '',
-    isAdult: false,
-    acceptTerms: false,
   };
 
   // --- Estado de UI ---
   editing = signal(false);
   deleted = signal(false);
+  saving = signal(false);
+  changingPassword = signal(false);
+  loadingProfile = signal(false);
 
-  // --- Validaciones (identicas al registro) ---
-  usernameError = computed(() => {
+  // --- Indicador de diálogo de cambio de contraseña ---
+  passwordDialogVisible = signal(false);
+
+  // --- Validaciones ---
+  userNameError = computed(() => {
     if (!this.editing()) return '';
-    const val = this.username();
+    const val = this.userName();
     if (val.trim().length === 0) return 'El usuario es requerido';
     if (/\s/.test(val)) return 'El usuario no puede contener espacios en blanco';
     return '';
   });
 
-  fullNameError = computed(() => {
+  firstNameError = computed(() => {
     if (!this.editing()) return '';
-    const val = this.fullName();
-    if (val.trim().length === 0) return 'El nombre completo es requerido';
-    if (/\s{2,}/.test(val)) return 'El nombre no puede contener dos espacios seguidos';
+    const val = this.firstName();
+    if (val.trim().length === 0) return 'El nombre es requerido';
+    return '';
+  });
+
+  lastNameError = computed(() => {
+    if (!this.editing()) return '';
+    const val = this.lastName();
+    if (val.trim().length === 0) return 'El apellido es requerido';
     return '';
   });
 
@@ -101,28 +114,11 @@ export class Profile {
     return '';
   });
 
-  phoneError = computed(() => {
-    if (!this.editing()) return '';
-    const phone = this.phone();
-    if (phone.trim().length === 0) return 'El telefono es requerido';
-    if (!/^\d+$/.test(phone)) return 'El telefono solo debe contener numeros';
-    if (phone.length !== 10) return 'El telefono debe tener exactamente 10 digitos';
-    return '';
-  });
-
-  addressError = computed(() => {
-    if (!this.editing()) return '';
-    const val = this.address();
-    if (val.trim().length === 0) return 'La direccion es requerida';
-    return '';
-  });
-
-  passwordErrors = computed(() => {
-    if (!this.editing()) return [];
+  newPasswordErrors = computed(() => {
     const errors: string[] = [];
-    const pwd = this.password();
+    const pwd = this.newPassword();
     if (pwd.length === 0) {
-      errors.push('La contrasena es requerida');
+      errors.push('La nueva contrasena es requerida');
       return errors;
     }
     if (/\s/.test(pwd)) errors.push('La contrasena no puede contener espacios en blanco');
@@ -133,40 +129,47 @@ export class Profile {
   });
 
   passwordsMatch = computed(() => {
-    const pwd = this.password();
-    const confirm = this.confirmPassword();
+    const pwd = this.newPassword();
+    const confirm = this.confirmNewPassword();
     return pwd.length > 0 && confirm.length > 0 && pwd === confirm;
   });
 
   passwordsDontMatch = computed(() => {
-    if (!this.editing()) return false;
-    const confirm = this.confirmPassword();
+    const confirm = this.confirmNewPassword();
     return confirm.length > 0 && !this.passwordsMatch();
   });
 
+  isPasswordFormValid = computed(() => {
+    const currentPwd = this.currentPassword();
+    const newPwd = this.newPassword();
+    return (
+      currentPwd.trim().length > 0 &&
+      newPwd.length >= 10 &&
+      !/\s/.test(newPwd) &&
+      this.hasSpecialChar(newPwd) &&
+      this.passwordsMatch()
+    );
+  });
+
   isFormValid = computed(() => {
-    const user = this.username();
-    const name = this.fullName();
+    const user = this.userName();
+    const first = this.firstName();
+    const last = this.lastName();
     const mail = this.email();
-    const pwd = this.password();
-    const phone = this.phone();
 
     return (
       user.trim().length > 0 &&
       !/\s/.test(user) &&
-      name.trim().length > 0 &&
-      !/\s{2,}/.test(name) &&
+      first.trim().length > 0 &&
+      last.trim().length > 0 &&
       mail.trim().length > 0 &&
-      !/\s/.test(mail) &&
-      pwd.length >= 10 &&
-      !/\s/.test(pwd) &&
-      this.hasSpecialChar(pwd) &&
-      this.passwordsMatch() &&
-      /^\d{10}$/.test(phone) &&
-      this.address().trim().length > 0 &&
-      this.isAdult() &&
-      this.acceptTerms()
+      !/\s/.test(mail)
     );
+  });
+
+  /** Nombre completo para display */
+  fullName = computed(() => {
+    return [this.firstName(), this.middleName(), this.lastName()].filter(Boolean).join(' ');
   });
 
   constructor(
@@ -174,36 +177,44 @@ export class Profile {
     private confirmationService: ConfirmationService
   ) {}
 
+  ngOnInit(): void {
+    this.loadProfile();
+  }
+
   private hasSpecialChar(str: string): boolean {
     return this.SPECIAL_CHARS.split('').some((char) => str.includes(char));
+  }
+
+  // --- Cargar perfil desde el backend ---
+  private loadProfile(): void {
+    const user = this.authService.currentUser();
+    if (user) {
+      this.userName.set(user.userName);
+      this.firstName.set(user.firstName);
+      this.middleName.set(user.middleName || '');
+      this.lastName.set(user.lastName);
+      this.email.set(user.email);
+    }
   }
 
   // --- Acciones ---
   startEdit(): void {
     this.backup = {
-      username: this.username(),
-      fullName: this.fullName(),
+      userName: this.userName(),
+      firstName: this.firstName(),
+      middleName: this.middleName(),
+      lastName: this.lastName(),
       email: this.email(),
-      phone: this.phone(),
-      address: this.address(),
-      password: this.password(),
-      confirmPassword: this.confirmPassword(),
-      isAdult: this.isAdult(),
-      acceptTerms: this.acceptTerms(),
     };
     this.editing.set(true);
   }
 
   cancelEdit(): void {
-    this.username.set(this.backup.username);
-    this.fullName.set(this.backup.fullName);
+    this.userName.set(this.backup.userName);
+    this.firstName.set(this.backup.firstName);
+    this.middleName.set(this.backup.middleName);
+    this.lastName.set(this.backup.lastName);
     this.email.set(this.backup.email);
-    this.phone.set(this.backup.phone);
-    this.address.set(this.backup.address);
-    this.password.set(this.backup.password);
-    this.confirmPassword.set(this.backup.confirmPassword);
-    this.isAdult.set(this.backup.isAdult);
-    this.acceptTerms.set(this.backup.acceptTerms);
     this.editing.set(false);
   }
 
@@ -218,15 +229,101 @@ export class Profile {
       return;
     }
 
-    this.editing.set(false);
-    this.messageService.add({
-      severity: 'success',
-      summary: 'Perfil actualizado',
-      detail: 'Los cambios han sido guardados correctamente',
-      life: 3000,
+    const user = this.authService.currentUser();
+    if (!user) return;
+
+    this.saving.set(true);
+
+    this.userService.updateUser(user.id, {
+      userName: this.userName().trim(),
+      firstName: this.firstName().trim(),
+      middleName: this.middleName().trim() || null,
+      lastName: this.lastName().trim(),
+      email: this.email().trim(),
+    }).subscribe({
+      next: () => {
+        this.saving.set(false);
+        this.editing.set(false);
+
+        // Actualizar el currentUser en AuthService con los datos nuevos
+        this.authService.currentUser.set({
+          ...user,
+          userName: this.userName().trim(),
+          firstName: this.firstName().trim(),
+          middleName: this.middleName().trim() || '',
+          lastName: this.lastName().trim(),
+          email: this.email().trim(),
+        });
+
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Perfil actualizado',
+          detail: 'Los cambios han sido guardados correctamente',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.saving.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: err?.error?.message || 'No se pudo actualizar el perfil',
+          life: 5000,
+        });
+      },
     });
   }
 
+  // --- Cambio de contraseña ---
+  openPasswordDialog(): void {
+    this.currentPassword.set('');
+    this.newPassword.set('');
+    this.confirmNewPassword.set('');
+    this.passwordDialogVisible.set(true);
+  }
+
+  hidePasswordDialog(): void {
+    this.passwordDialogVisible.set(false);
+  }
+
+  changePassword(): void {
+    if (!this.isPasswordFormValid()) return;
+
+    const user = this.authService.currentUser();
+    if (!user) return;
+
+    this.changingPassword.set(true);
+
+    this.userService.changePassword(user.id, {
+      currentPassword: this.currentPassword().trim(),
+      newPassword: this.newPassword().trim(),
+    }).subscribe({
+      next: () => {
+        this.changingPassword.set(false);
+        this.passwordDialogVisible.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: 'Contrasena actualizada',
+          detail: 'Tu contrasena ha sido cambiada correctamente',
+          life: 3000,
+        });
+      },
+      error: (err) => {
+        this.changingPassword.set(false);
+        const detail = err?.error?.intOpCode === 'EUSCF409'
+          ? 'La contrasena actual es incorrecta'
+          : (err?.error?.message || 'No se pudo cambiar la contrasena');
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail,
+          life: 5000,
+        });
+      },
+    });
+  }
+
+  // --- Desactivar cuenta ---
   confirmDelete(): void {
     this.confirmationService.confirm({
       message: '¿Estás seguro de que deseas desactivar tu cuenta? Esta acción marcará tu perfil como eliminado.',
@@ -236,13 +333,28 @@ export class Profile {
       rejectLabel: 'Cancelar',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => {
-        this.deleted.set(true);
-        this.editing.set(false);
-        this.messageService.add({
-          severity: 'warn',
-          summary: 'Cuenta desactivada',
-          detail: 'Tu cuenta ha sido marcada como eliminada',
-          life: 3000,
+        const user = this.authService.currentUser();
+        if (!user) return;
+
+        this.userService.deactivateUser(user.id).subscribe({
+          next: () => {
+            this.deleted.set(true);
+            this.editing.set(false);
+            this.messageService.add({
+              severity: 'warn',
+              summary: 'Cuenta desactivada',
+              detail: 'Tu cuenta ha sido marcada como eliminada',
+              life: 3000,
+            });
+          },
+          error: (err) => {
+            this.messageService.add({
+              severity: 'error',
+              summary: 'Error',
+              detail: err?.error?.message || 'No se pudo desactivar la cuenta',
+              life: 5000,
+            });
+          },
         });
       },
     });
@@ -258,22 +370,19 @@ export class Profile {
     });
   }
 
-  getEstadoSeverity(estado: string): 'success' | 'warn' | 'danger' | 'info' | 'secondary' {
-    switch (estado) {
-      case 'pendiente': return 'warn';
-      case 'en progreso': return 'info';
-      case 'en revision': return 'secondary';
-      case 'finalizado': return 'success';
-      default: return 'info';
-    }
+  getStatusLabel(status: TicketStatusBackend): string {
+    return TICKET_STATUS_LABELS[status] ?? 'Desconocido';
   }
 
-  getPrioridadSeverity(prioridad: string): 'success' | 'warn' | 'danger' | 'info' {
-    switch (prioridad) {
-      case 'alta': return 'danger';
-      case 'media': return 'warn';
-      case 'baja': return 'success';
-      default: return 'info';
-    }
+  getStatusSeverity(status: TicketStatusBackend): TagSeverity {
+    return TICKET_STATUS_SEVERITY[status] ?? 'info';
+  }
+
+  getPriorityLabel(priority: TicketPriorityBackend): string {
+    return TICKET_PRIORITY_LABELS[priority] ?? 'Desconocida';
+  }
+
+  getPrioritySeverity(priority: TicketPriorityBackend): TagSeverity {
+    return TICKET_PRIORITY_SEVERITY[priority] ?? 'info';
   }
 }

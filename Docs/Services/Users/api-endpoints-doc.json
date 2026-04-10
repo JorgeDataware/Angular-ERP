@@ -1,0 +1,2028 @@
+{
+  "service": {
+    "name": "Users Microservice",
+    "description": "Microservicio responsable de la gestión completa de usuarios, autenticación, autorización y permisos dentro de un sistema de tickets y grupos",
+    "baseInternalRoutes": [
+      "api/User"
+    ],
+    "technology": ".NET 9 with ASP.NET Core",
+    "authentication": "JWT Bearer Token (header Authorization or cookie 'jwt')",
+    "notes": [
+      "Todos los endpoints usan una estructura de respuesta estandarizada",
+      "El formato de respuesta incluye statusCode, intOpCode, message, y data (siempre un arreglo)",
+      "La autenticación se valida mediante JWT con claims (NameIdentifier contiene el userId)",
+      "Los permisos se validan contra módulos (Users, Groups, Tickets) y acciones (Create, Read, Update, Delete, Assign, UpdateStatus)",
+      "Algunas validaciones de permisos permiten que el usuario actúe sobre sí mismo incluso sin el permiso general"
+    ]
+  },
+  "globalEnums": [
+    {
+      "name": "Status",
+      "description": "Estado de una entidad (usuario, grupo, ticket)",
+      "values": [
+        { "key": "Active", "value": 1 },
+        { "key": "Inactive", "value": 2 }
+      ]
+    },
+    {
+      "name": "Modules",
+      "description": "Módulos del sistema sobre los que se pueden asignar permisos",
+      "values": [
+        { "key": "Users", "value": 1, "description": "Módulo de gestión de usuarios" },
+        { "key": "Groups", "value": 2, "description": "Módulo de gestión de grupos" },
+        { "key": "Tickets", "value": 3, "description": "Módulo de gestión de tickets" }
+      ]
+    },
+    {
+      "name": "Actions",
+      "description": "Acciones que se pueden realizar sobre los módulos",
+      "values": [
+        { "key": "Create", "value": 1, "description": "Crear nuevas entidades" },
+        { "key": "Read", "value": 2, "description": "Leer/consultar entidades" },
+        { "key": "Update", "value": 3, "description": "Actualizar campos de entidades (excepto estado y asignación para tickets)" },
+        { "key": "Delete", "value": 4, "description": "Eliminar o desactivar entidades" },
+        { "key": "Assign", "value": 5, "description": "Asignar tickets sin asignar a usuarios específicos" },
+        { "key": "UpdateStatus", "value": 6, "description": "Actualizar el estado de tickets (Open, InProgress, Closed)" }
+      ]
+    }
+  ],
+  "globalPermissions": [
+    {
+      "name": "Users.Create",
+      "description": "Permite crear nuevos usuarios en el sistema",
+      "module": "Users",
+      "action": "Create"
+    },
+    {
+      "name": "Users.Read",
+      "description": "Permite consultar información de usuarios",
+      "module": "Users",
+      "action": "Read"
+    },
+    {
+      "name": "Users.Update",
+      "description": "Permite actualizar datos de usuarios (o el propio usuario puede actualizar su propia información)",
+      "module": "Users",
+      "action": "Update"
+    },
+    {
+      "name": "Users.Delete",
+      "description": "Permite desactivar/eliminar usuarios del sistema",
+      "module": "Users",
+      "action": "Delete"
+    },
+    {
+      "name": "Groups.Create",
+      "description": "Permite crear nuevos grupos",
+      "module": "Groups",
+      "action": "Create"
+    },
+    {
+      "name": "Groups.Read",
+      "description": "Permite consultar información de grupos",
+      "module": "Groups",
+      "action": "Read"
+    },
+    {
+      "name": "Groups.Update",
+      "description": "Permite actualizar datos de grupos",
+      "module": "Groups",
+      "action": "Update"
+    },
+    {
+      "name": "Groups.Delete",
+      "description": "Permite eliminar grupos",
+      "module": "Groups",
+      "action": "Delete"
+    },
+    {
+      "name": "Tickets.Create",
+      "description": "Permite crear nuevos tickets",
+      "module": "Tickets",
+      "action": "Create"
+    },
+    {
+      "name": "Tickets.Read",
+      "description": "Permite consultar información de tickets",
+      "module": "Tickets",
+      "action": "Read"
+    },
+    {
+      "name": "Tickets.Update",
+      "description": "Permite actualizar campos de tickets (excepto estado y asignación)",
+      "module": "Tickets",
+      "action": "Update"
+    },
+    {
+      "name": "Tickets.Delete",
+      "description": "Permite eliminar tickets",
+      "module": "Tickets",
+      "action": "Delete"
+    },
+    {
+      "name": "Tickets.Assign",
+      "description": "Permite asignar tickets sin asignar a usuarios específicos",
+      "module": "Tickets",
+      "action": "Assign"
+    },
+    {
+      "name": "Tickets.UpdateStatus",
+      "description": "Permite actualizar el estado de tickets (Open → InProgress → Closed)",
+      "module": "Tickets",
+      "action": "UpdateStatus"
+    }
+  ],
+  "endpoints": [
+    {
+      "id": "create-user",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/",
+      "internalEndpoint": "api/User/CreateUser",
+      "httpMethod": "POST",
+      "summary": "Crear un nuevo usuario en el sistema",
+      "description": "Crea un nuevo usuario con sus datos personales y opcionalmente asigna permisos iniciales. Requiere autenticación y permiso de creación en el módulo Users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Create"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Create (Module=1, Action=1). La validación se realiza consultando la tabla user_permissions.",
+      "ownershipRules": [
+        "No hay reglas de ownership, solo se requiere el permiso Users.Create"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["UserName", "FirstName", "LastName", "Email", "Password"],
+        "properties": {
+          "UserName": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 50,
+            "description": "Nombre de usuario único"
+          },
+          "FirstName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Primer nombre del usuario"
+          },
+          "MiddleName": {
+            "type": "string",
+            "maxLength": 100,
+            "nullable": true,
+            "description": "Segundo nombre (opcional)"
+          },
+          "LastName": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 100,
+            "description": "Apellido del usuario"
+          },
+          "Email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 255,
+            "description": "Correo electrónico válido"
+          },
+          "Password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 100,
+            "pattern": "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&#])[A-Za-z\\d@$!%*?&#]{8,}$",
+            "description": "Contraseña con al menos una mayúscula, una minúscula, un número y un carácter especial"
+          },
+          "PermissionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nullable": true,
+            "description": "Lista opcional de IDs de permisos a asignar al usuario"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "UserName": "jdoe",
+        "FirstName": "John",
+        "MiddleName": "Michael",
+        "LastName": "Doe",
+        "Email": "john.doe@example.com",
+        "Password": "SecurePass123!",
+        "PermissionIds": [
+          "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "b2c3d4e5-f6a7-8901-bcde-f12345678901"
+        ]
+      },
+      "fieldsOptional": ["MiddleName", "PermissionIds"],
+      "fieldsRequired": ["UserName", "FirstName", "LastName", "Email", "Password"],
+      "validationRules": [
+        "UserName debe tener entre 3 y 50 caracteres",
+        "FirstName y LastName deben tener entre 2 y 100 caracteres",
+        "Email debe tener formato válido y máximo 255 caracteres",
+        "Password debe tener mínimo 8 caracteres, incluir al menos una mayúscula, una minúscula, un número y un carácter especial (@$!%*?&#)",
+        "PermissionIds debe ser un arreglo de UUIDs válidos si se proporciona"
+      ],
+      "responses": [
+        {
+          "statusCode": 201,
+          "intOpCode": "SUSCR201",
+          "message": "User created successfully.",
+          "whenItHappens": "Cuando el usuario se crea exitosamente en la base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (siempre vacío en este caso)"
+          },
+          "responseExample": {
+            "statusCode": 201,
+            "intOpCode": "SUSCR201",
+            "message": "User created successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Create",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "[Mensaje de error específico del repositorio]",
+          "whenItHappens": "Cuando ocurre un error durante la creación del usuario (ej: email duplicado, validación fallida)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "A user with the provided email already exists.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Create",
+        "La contraseña se hashea usando PBKDF2 antes de almacenarse",
+        "Se genera un salt único para cada usuario",
+        "Si se proporcionan PermissionIds, se validan y asignan al usuario mediante la tabla user_permissions",
+        "El usuario se crea con Status=Active por defecto",
+        "No se permite crear usuarios con email duplicado (validación inferida del repositorio)"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": ["JWTService", "PasswordHashService"],
+        "helpers": [],
+        "entities": ["User", "UserPermissions", "Permission"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Este endpoint se usa típicamente en pantallas de administración de usuarios",
+        "El campo PermissionIds debe poblarse desde el endpoint GET /users/permissions",
+        "Mostrar validación en tiempo real para el formato de contraseña",
+        "El email debe validarse con formato antes de enviar",
+        "Tras crear exitosamente, refrescar la tabla de usuarios",
+        "Manejar específicamente el error 400 para mostrar que el email ya existe",
+        "No se retorna el objeto del usuario creado en data, solo confirmación"
+      ],
+      "inferenceNotes": [
+        "No se encontró validación explícita de email duplicado en el controller, pero se infiere del repositorio RegisterUser que existe esta validación"
+      ]
+    },
+    {
+      "id": "login",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/auth/login",
+      "internalEndpoint": "api/User/login",
+      "httpMethod": "POST",
+      "summary": "Autenticar usuario y obtener token JWT",
+      "description": "Endpoint público que permite a un usuario autenticarse con email y contraseña. Retorna un token JWT, su expiración y los permisos del usuario.",
+      "requiresAuth": false,
+      "authType": "none",
+      "requiredPermissions": [],
+      "permissionNotes": "Endpoint público, no requiere autenticación previa",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["Email", "Password"],
+        "properties": {
+          "Email": {
+            "type": "string",
+            "format": "email",
+            "description": "Correo electrónico del usuario"
+          },
+          "Password": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "description": "Contraseña del usuario"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "Email": "john.doe@example.com",
+        "Password": "SecurePass123!"
+      },
+      "fieldsOptional": [],
+      "fieldsRequired": ["Email", "Password"],
+      "validationRules": [
+        "Email debe tener formato válido",
+        "Password es requerido"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLG200",
+          "message": "Login successful.",
+          "whenItHappens": "Cuando las credenciales son válidas y el usuario está activo",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array con un objeto que contiene token, expiresAt y permissions"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLG200",
+            "message": "Login successful.",
+            "data": [
+              {
+                "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                "expiresAt": "2026-04-06T15:30:00Z",
+                "permissions": [
+                  "Users.Read",
+                  "Users.Create",
+                  "Tickets.Read"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando no existe un usuario con el email proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "The provided username or password is incorrect.",
+          "whenItHappens": "Cuando la contraseña no coincide con el hash almacenado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "The provided username or password is incorrect.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "The user account is inactive. Please contact support.",
+          "whenItHappens": "Cuando el usuario tiene Status=Inactive",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "The user account is inactive. Please contact support.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "[Mensaje de error al obtener permisos]",
+          "whenItHappens": "Cuando falla la obtención de permisos del usuario después de validar credenciales (caso muy improbable)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Error retrieving user permissions",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario debe existir en la base de datos",
+        "El usuario debe tener Status=Active",
+        "La contraseña se verifica usando PBKDF2 contra el hash almacenado",
+        "Se genera un JWT con duración de 60 minutos desde el momento del login",
+        "El token incluye claims del usuario y sus permisos",
+        "Los permisos se obtienen de la tabla user_permissions join permission",
+        "Si el usuario no tiene permisos asignados, se retorna un array vacío de permissions"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": ["JWTService", "PasswordHashService"],
+        "helpers": [],
+        "entities": ["User", "UserPermissions", "Permission"],
+        "claims": []
+      },
+      "frontendNotes": [
+        "Este es el endpoint principal para el flujo de autenticación",
+        "Almacenar el token en localStorage o sessionStorage",
+        "Almacenar expiresAt para validar si el token está vigente",
+        "Almacenar permissions para controlar UI (mostrar/ocultar botones según permisos)",
+        "Manejar los 3 casos de error 401: usuario no existe, contraseña incorrecta, usuario inactivo",
+        "Mostrar mensajes específicos para cada caso de error",
+        "Redirigir al dashboard tras login exitoso",
+        "El token debe incluirse en todas las peticiones subsecuentes en el header Authorization",
+        "Considerar implementar auto-logout cuando expire el token (60 minutos)"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "logout",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/auth/logout",
+      "internalEndpoint": "api/User/logout",
+      "httpMethod": "POST",
+      "summary": "Cerrar sesión del usuario autenticado",
+      "description": "Elimina la cookie JWT del cliente. El logout se maneja principalmente en el frontend eliminando el token almacenado.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Solo requiere estar autenticado, no se validan permisos específicos",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Cookie JWT que será eliminada"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSLO200",
+          "message": "Logout successful.",
+          "whenItHappens": "Siempre que el usuario esté autenticado (el endpoint solo elimina la cookie)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSLO200",
+            "message": "Logout successful.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido en el header o cookie",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          },
+          "inferenceNote": "Este error es manejado por el middleware de autenticación de ASP.NET Core, no por el controller"
+        }
+      ],
+      "businessRules": [
+        "Solo se requiere estar autenticado",
+        "El endpoint elimina la cookie 'jwt' del cliente",
+        "El frontend debe eliminar el token almacenado en localStorage/sessionStorage",
+        "No hay invalidación de token en servidor (el JWT sigue válido hasta su expiración)"
+      ],
+      "dependencies": {
+        "repositories": [],
+        "services": [],
+        "helpers": [],
+        "entities": [],
+        "claims": []
+      },
+      "frontendNotes": [
+        "Llamar a este endpoint antes de limpiar el token del frontend",
+        "Después de recibir respuesta 200, eliminar token y permissions del almacenamiento",
+        "Redirigir al usuario a la página de login",
+        "Si falla (401), igual limpiar el almacenamiento local y redirigir a login",
+        "El logout es principalmente una operación de frontend ya que el token no se invalida en servidor"
+      ],
+      "inferenceNotes": [
+        "El endpoint solo elimina la cookie 'jwt', pero si el frontend usa localStorage para el token, debe eliminarlo manualmente",
+        "No hay blacklist de tokens, por lo que un token sigue siendo válido hasta su expiración natural"
+      ]
+    },
+    {
+      "id": "get-users",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/",
+      "internalEndpoint": "api/User/GetUsers",
+      "httpMethod": "GET",
+      "summary": "Obtener todos los usuarios con sus permisos",
+      "description": "Retorna la lista completa de usuarios del sistema junto con sus permisos asignados. Requiere permiso de lectura en el módulo Users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Read"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Read (Module=1, Action=2)",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "Users retrieved successfully.",
+          "whenItHappens": "Cuando el usuario tiene permiso Users.Read y la consulta es exitosa",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array de UserWithPermissionsDto"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "Users retrieved successfully.",
+            "data": [
+              {
+                "Id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "UserName": "jdoe",
+                "FirstName": "John",
+                "MiddleName": "Michael",
+                "LastName": "Doe",
+                "Email": "john.doe@example.com",
+                "status": 1,
+                "Permissions": [
+                  {
+                    "Module": 1,
+                    "Action": 2,
+                    "Name": "Users.Read"
+                  },
+                  {
+                    "Module": 3,
+                    "Action": 1,
+                    "Name": "Tickets.Create"
+                  }
+                ]
+              },
+              {
+                "Id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                "UserName": "asmith",
+                "FirstName": "Alice",
+                "MiddleName": null,
+                "LastName": "Smith",
+                "Email": "alice.smith@example.com",
+                "status": 1,
+                "Permissions": []
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Read",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Read",
+        "Se retornan TODOS los usuarios del sistema sin filtros de paginación",
+        "Cada usuario incluye su lista completa de permisos",
+        "Los usuarios sin permisos tienen un array Permissions vacío",
+        "Los resultados se ordenan por user_name",
+        "Se usa LEFT JOIN por lo que usuarios sin permisos también se retornan"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["User", "UserPermissions", "Permission"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Este endpoint es ideal para poblar tablas de administración de usuarios",
+        "Usar data[].Permissions para mostrar badges o chips de permisos por usuario",
+        "Filtrar por status para mostrar solo activos o inactivos según vista",
+        "Implementar paginación, ordenamiento y búsqueda en el frontend",
+        "El campo MiddleName puede ser null, manejarlo en la UI",
+        "Usar los valores de status: 1=Active, 2=Inactive para mostrar íconos o colores",
+        "Los IDs de usuarios son necesarios para operaciones de edición/eliminación",
+        "Considerar cachear esta respuesta y refrescar solo cuando se creen/actualicen usuarios"
+      ],
+      "inferenceNotes": [
+        "No hay paginación implementada en el backend, se retornan todos los usuarios"
+      ]
+    },
+    {
+      "id": "get-user-by-id",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/{userId}",
+      "internalEndpoint": "api/User/GetUserById/{userId}",
+      "httpMethod": "GET",
+      "summary": "Obtener información detallada de un usuario específico",
+      "description": "Retorna los datos de un usuario específico identificado por su ID. Requiere permiso de lectura en el módulo Users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Read"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Read (Module=1, Action=2)",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del usuario a consultar",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [
+        "userId debe ser un GUID válido"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRD200",
+          "message": "User retrieved successfully.",
+          "whenItHappens": "Cuando el usuario existe y el solicitante tiene permiso Users.Read",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array con un UserDto"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRD200",
+            "message": "User retrieved successfully.",
+            "data": [
+              {
+                "Id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "user_name": "jdoe",
+                "first_name": "John",
+                "middle_name": "Michael",
+                "last_name": "Doe",
+                "email": "john.doe@example.com",
+                "status": 1
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Read",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando no existe un usuario con el userId proporcionado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Read",
+        "El usuario solicitado debe existir en la base de datos",
+        "Se retorna UserDto sin la lista de permisos (a diferencia de GetUsers)",
+        "Los nombres de los campos en la respuesta usan snake_case (user_name, first_name, etc.)"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Usar este endpoint para modales de detalle de usuario",
+        "Útil para formularios de edición pre-poblados",
+        "El response usa snake_case en los nombres de campos, mapearlo a camelCase si es necesario",
+        "No incluye permisos, usar GET /users/permissions si se necesitan",
+        "Manejar el 404 mostrando mensaje de usuario no encontrado",
+        "El campo middle_name puede ser null"
+      ],
+      "inferenceNotes": [
+        "A diferencia de GetUsers que retorna UserWithPermissionsDto, este retorna UserDto sin permisos"
+      ]
+    },
+    {
+      "id": "get-me",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/me",
+      "internalEndpoint": "api/User/Me",
+      "httpMethod": "GET",
+      "summary": "Obtener información del usuario autenticado",
+      "description": "Retorna los datos del usuario actualmente autenticado basándose en el token JWT. No requiere permisos específicos más allá de estar autenticado.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": [],
+      "permissionNotes": "Solo requiere estar autenticado, no se validan permisos específicos. El userId se extrae del claim NameIdentifier del JWT.",
+      "ownershipRules": [
+        "El usuario solo puede obtener su propia información (determinada por el JWT)"
+      ],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSME200",
+          "message": "Authenticated user retrieved successfully.",
+          "whenItHappens": "Cuando el usuario autenticado existe en la base de datos",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array con un UserDto"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSME200",
+            "message": "Authenticated user retrieved successfully.",
+            "data": [
+              {
+                "Id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "user_name": "jdoe",
+                "first_name": "John",
+                "middle_name": "Michael",
+                "last_name": "Doe",
+                "email": "john.doe@example.com",
+                "status": 1
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando el userId del JWT no existe en la base de datos (caso muy improbable, solo si se borró el usuario después del login)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario debe estar autenticado con un JWT válido",
+        "El userId se extrae del claim NameIdentifier del token",
+        "No se requieren permisos específicos",
+        "Retorna UserDto sin permisos"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Usar este endpoint para poblar el perfil del usuario en la UI",
+        "Llamar después del login para obtener datos completos del usuario",
+        "Útil para mostrar nombre y email en headers/navbars",
+        "Cachear la respuesta y solo refrescar tras actualizaciones del perfil",
+        "No incluye permisos; los permisos ya vienen en el login",
+        "El campo middle_name puede ser null",
+        "Usar snake_case a camelCase mapping si es necesario"
+      ],
+      "inferenceNotes": []
+    },
+    {
+      "id": "update-user-permissions",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/{userId}/permissions",
+      "internalEndpoint": "api/User/UpdateUserPermissions/{userId}",
+      "httpMethod": "PUT",
+      "summary": "Actualizar los permisos de un usuario",
+      "description": "Reemplaza completamente los permisos de un usuario con una nueva lista. Requiere permiso de actualización en el módulo Users.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Update"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Update (Module=1, Action=3)",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del usuario cuyos permisos se van a actualizar",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["permissionIds"],
+        "properties": {
+          "permissionIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Lista de IDs de permisos a asignar al usuario (reemplaza los existentes)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "permissionIds": [
+          "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+          "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+          "c3d4e5f6-a7b8-9012-cdef-123456789012"
+        ]
+      },
+      "fieldsOptional": [],
+      "fieldsRequired": ["permissionIds"],
+      "validationRules": [
+        "permissionIds debe ser un array de GUIDs válidos",
+        "userId debe ser un GUID válido"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPM200",
+          "message": "User permissions updated successfully.",
+          "whenItHappens": "Cuando los permisos se actualizan exitosamente",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPM200",
+            "message": "User permissions updated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Update",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando el usuario con el userId especificado no existe",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "[Mensaje de error específico]",
+          "whenItHappens": "Cuando ocurre otro error durante la actualización (ej: permissionId inválido)",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Invalid permission ID provided",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Update",
+        "El usuario objetivo debe existir en la base de datos",
+        "Los permisos existentes se ELIMINAN completamente antes de insertar los nuevos",
+        "La operación es una sustitución completa, no un merge",
+        "Si permissionIds está vacío, se eliminarán todos los permisos del usuario",
+        "Los permissionIds deben existir en la tabla permission"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["User", "UserPermissions", "Permission"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Este endpoint reemplaza TODOS los permisos, no es un merge",
+        "Usar checkboxes o multi-select para elegir permisos",
+        "Pre-poblar con GET /users/{userId} y luego GET /users/permissions",
+        "Enviar la lista completa de permisos deseados, no solo los nuevos",
+        "Tras actualizar exitosamente, refrescar la lista de usuarios",
+        "Mostrar confirmación antes de actualizar permisos",
+        "Considerar que el usuario podría quedarse sin permisos si se envía array vacío",
+        "Manejar el error 404 si el usuario fue eliminado entre la carga y el submit"
+      ],
+      "inferenceNotes": [
+        "La implementación usa ExecuteDeleteAsync para eliminar todos los permisos existentes antes de insertar los nuevos"
+      ]
+    },
+    {
+      "id": "update-user",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/{userId}",
+      "internalEndpoint": "api/User/UpdateUser/{userId}",
+      "httpMethod": "PUT",
+      "summary": "Actualizar datos personales de un usuario",
+      "description": "Actualiza los datos personales de un usuario (nombre, apellido, email, username). El usuario puede actualizarse a sí mismo o requiere permiso Users.Update.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Update"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Update (Module=1, Action=3) O ser el mismo usuario que se está actualizando",
+      "ownershipRules": [
+        "El usuario puede actualizar su propia información sin necesidad del permiso Users.Update",
+        "Si el requesterId != userId, se requiere el permiso Users.Update"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del usuario a actualizar",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["UserName", "FirstName", "LastName", "Email"],
+        "properties": {
+          "UserName": {
+            "type": "string",
+            "description": "Nombre de usuario"
+          },
+          "FirstName": {
+            "type": "string",
+            "description": "Primer nombre"
+          },
+          "MiddleName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Segundo nombre (opcional)"
+          },
+          "LastName": {
+            "type": "string",
+            "description": "Apellido"
+          },
+          "Email": {
+            "type": "string",
+            "format": "email",
+            "description": "Correo electrónico"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "UserName": "jdoe_updated",
+        "FirstName": "John",
+        "MiddleName": "Michael",
+        "LastName": "Doe",
+        "Email": "john.doe.new@example.com"
+      },
+      "fieldsOptional": ["MiddleName"],
+      "fieldsRequired": ["UserName", "FirstName", "LastName", "Email"],
+      "validationRules": [
+        "userId debe ser un GUID válido",
+        "No se especifican validaciones de longitud o formato en PatchUserRequest (inferido como menos estricto que AddUserRequest)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSUP200",
+          "message": "User updated successfully.",
+          "whenItHappens": "Cuando la actualización es exitosa",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSUP200",
+            "message": "User updated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no es el dueño ni tiene permiso Users.Update",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando el usuario con el userId especificado no existe",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario puede actualizar su propia información (requesterId == userId) sin necesidad de permisos especiales",
+        "Si el usuario intenta actualizar a otro usuario, necesita el permiso Users.Update",
+        "La validación de permisos usa CheckUserPermissionsOrIsHimself",
+        "El usuario debe existir en la base de datos",
+        "Se actualiza usando AutoMapper desde PatchUserRequest al User entity",
+        "No se puede cambiar la contraseña mediante este endpoint (usar ChangePassword)"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": ["AutoMapper"],
+        "entities": ["User"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Permitir a los usuarios editar su propio perfil sin verificar permisos",
+        "Para administradores, verificar permiso Users.Update antes de mostrar opción de editar otros usuarios",
+        "Pre-poblar el formulario con GET /users/{userId} o GET /users/me",
+        "Validar formato de email en frontend antes de enviar",
+        "Tras actualizar exitosamente, refrescar los datos mostrados en la UI",
+        "Si el usuario actualiza su propio perfil, actualizar también el contexto de usuario en la app",
+        "Manejar el 404 si el usuario fue eliminado entre la carga y el submit",
+        "MiddleName puede ser null o string vacío"
+      ],
+      "inferenceNotes": [
+        "PatchUserRequest no tiene validaciones de Data Annotations, se asume validación más laxa que AddUserRequest"
+      ]
+    },
+    {
+      "id": "change-password",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/{userId}/password",
+      "internalEndpoint": "api/User/ChangePassword/{userId}",
+      "httpMethod": "PATCH",
+      "summary": "Cambiar la contraseña de un usuario",
+      "description": "Permite cambiar la contraseña de un usuario. Si el usuario cambia su propia contraseña, debe proporcionar la contraseña actual. Si un admin cambia la contraseña de otro usuario, no se requiere la contraseña actual.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Update"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Update (Module=1, Action=3) O ser el mismo usuario cuya contraseña se está cambiando",
+      "ownershipRules": [
+        "Si requesterId == userId, el usuario está cambiando su propia contraseña y DEBE proporcionar CurrentPassword válida",
+        "Si requesterId != userId, se requiere permiso Users.Update y NO se valida CurrentPassword"
+      ],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del usuario cuya contraseña se va a cambiar",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["CurrentPassword", "NewPassword"],
+        "properties": {
+          "CurrentPassword": {
+            "type": "string",
+            "description": "Contraseña actual (requerida solo si el usuario cambia su propia contraseña)"
+          },
+          "NewPassword": {
+            "type": "string",
+            "description": "Nueva contraseña (debe cumplir requisitos de seguridad)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "CurrentPassword": "OldSecurePass123!",
+        "NewPassword": "NewSecurePass456!"
+      },
+      "fieldsOptional": [],
+      "fieldsRequired": ["CurrentPassword", "NewPassword"],
+      "validationRules": [
+        "userId debe ser un GUID válido",
+        "Si requesterId == userId, CurrentPassword debe ser válida",
+        "NewPassword debe cumplir requisitos de seguridad (inferido, aunque no validado en el record)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSPW200",
+          "message": "Password updated successfully.",
+          "whenItHappens": "Cuando la contraseña se actualiza exitosamente",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSPW200",
+            "message": "Password updated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "The provided username or password is incorrect.",
+          "whenItHappens": "Cuando el usuario intenta cambiar su propia contraseña pero CurrentPassword es incorrecta",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "The provided username or password is incorrect.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no es el dueño ni tiene permiso Users.Update",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando el usuario con el userId especificado no existe",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "[Mensaje de error específico]",
+          "whenItHappens": "Cuando ocurre otro error durante el cambio de contraseña",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Password change failed",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "Si requesterId == userId, se valida que CurrentPassword sea correcta antes de cambiar",
+        "Si requesterId != userId, se requiere permiso Users.Update y NO se valida CurrentPassword",
+        "La nueva contraseña se hashea usando PBKDF2 con un nuevo salt generado",
+        "El usuario debe existir en la base de datos",
+        "La lógica diferencia entre auto-cambio y cambio administrativo"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": ["PasswordHashService"],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Para usuarios cambiando su propia contraseña: requerir CurrentPassword, NewPassword y ConfirmPassword (este último validado en frontend)",
+        "Para admins cambiando contraseña de otros: solo requerir NewPassword",
+        "Mostrar indicador de fortaleza de contraseña en tiempo real",
+        "Validar que NewPassword cumpla requisitos antes de enviar",
+        "Tras cambio exitoso, mostrar confirmación y (si es el propio usuario) considerar re-login",
+        "Manejar específicamente el 401 con mensaje de contraseña actual incorrecta",
+        "Diferenciar UI según si es perfil propio o ajeno",
+        "Considerar logout automático después de cambio exitoso de contraseña propia"
+      ],
+      "inferenceNotes": [
+        "ChangePasswordRequest no tiene validaciones de Data Annotations, se asume validación en frontend",
+        "La lógica de validación de CurrentPassword solo aplica cuando requesterId == userId"
+      ]
+    },
+    {
+      "id": "get-permissions",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/permissions",
+      "internalEndpoint": "api/User/permissions",
+      "httpMethod": "GET",
+      "summary": "Obtener catálogo completo de permisos disponibles",
+      "description": "Retorna todos los permisos disponibles en el sistema. Útil para poblar formularios de asignación de permisos.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Read"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Read (Module=1, Action=2)",
+      "ownershipRules": [],
+      "routeParams": [],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": null,
+      "requestBodyExample": null,
+      "fieldsOptional": [],
+      "fieldsRequired": [],
+      "validationRules": [],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSRP200",
+          "message": "Permissions retrieved successfully.",
+          "whenItHappens": "Cuando el usuario tiene permiso Users.Read",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array de PermissionsDto"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSRP200",
+            "message": "Permissions retrieved successfully.",
+            "data": [
+              {
+                "Id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "Name": "Users.Create"
+              },
+              {
+                "Id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+                "Name": "Users.Read"
+              },
+              {
+                "Id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+                "Name": "Users.Update"
+              },
+              {
+                "Id": "d4e5f6a7-b8c9-0123-def1-234567890123",
+                "Name": "Users.Delete"
+              },
+              {
+                "Id": "e5f6a7b8-c9d0-1234-ef12-345678901234",
+                "Name": "Groups.Create"
+              },
+              {
+                "Id": "f6a7b8c9-d0e1-2345-f123-456789012345",
+                "Name": "Tickets.Read"
+              }
+            ]
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Read",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Read",
+        "Se retornan TODOS los permisos del sistema sin filtros",
+        "La respuesta incluye Id (GUID) y Name (string formato Module.Action)",
+        "Este endpoint es de catálogo, no retorna permisos de un usuario específico"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["Permission"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Usar este endpoint para poblar checkboxes o selects en formularios de permisos",
+        "Cachear la respuesta ya que los permisos del sistema son relativamente estáticos",
+        "Los IDs son necesarios para crear/actualizar usuarios con permisos",
+        "El campo Name puede usarse para mostrar etiquetas legibles (ej: 'Users.Create' → 'Crear Usuarios')",
+        "Agrupar permisos por módulo (Users, Groups, Tickets) en la UI para mejor UX",
+        "Considerar mapear Action numbers a nombres legibles (1=Create, 2=Read, etc.)"
+      ],
+      "inferenceNotes": [
+        "El endpoint retorna PermissionsDto (Id, Name) que es diferente de PermissionDto (Module, Action, Name)"
+      ]
+    },
+    {
+      "id": "deactivate-user",
+      "serviceName": "Users Microservice",
+      "controllerName": "UserController",
+      "gatewayEndpoint": "https://mi-gateway.onrender.com/users/{userId}/status",
+      "internalEndpoint": "api/User/{userId}/status",
+      "httpMethod": "DELETE",
+      "summary": "Desactivar o reactivar un usuario",
+      "description": "Cambia el estado de un usuario entre Active e Inactive. Requiere permiso de eliminación en el módulo Users. Los usuarios inactivos no pueden hacer login.",
+      "requiresAuth": true,
+      "authType": "bearer",
+      "requiredPermissions": ["Users.Delete"],
+      "permissionNotes": "El usuario autenticado debe tener el permiso Users.Delete (Module=1, Action=4)",
+      "ownershipRules": [],
+      "routeParams": [
+        {
+          "name": "userId",
+          "type": "string (UUID)",
+          "required": true,
+          "description": "ID único del usuario cuyo estado se va a cambiar",
+          "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        }
+      ],
+      "queryParams": [],
+      "headers": [
+        {
+          "name": "Authorization",
+          "required": true,
+          "description": "Bearer token con formato: 'Bearer {jwt_token}'",
+          "example": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        },
+        {
+          "name": "Content-Type",
+          "required": true,
+          "description": "Tipo de contenido del body",
+          "example": "application/json"
+        }
+      ],
+      "cookies": [
+        {
+          "name": "jwt",
+          "required": false,
+          "description": "Token JWT como alternativa al header Authorization"
+        }
+      ],
+      "requestBodySchema": {
+        "type": "object",
+        "required": ["Status"],
+        "properties": {
+          "Status": {
+            "type": "number",
+            "enum": [1, 2],
+            "description": "Nuevo estado del usuario (1=Active, 2=Inactive)"
+          }
+        }
+      },
+      "requestBodyExample": {
+        "Status": 2
+      },
+      "fieldsOptional": [],
+      "fieldsRequired": ["Status"],
+      "validationRules": [
+        "userId debe ser un GUID válido",
+        "Status debe ser 1 (Active) o 2 (Inactive)"
+      ],
+      "responses": [
+        {
+          "statusCode": 200,
+          "intOpCode": "SUSDU200",
+          "message": "User deactivated successfully.",
+          "whenItHappens": "Cuando el estado del usuario se actualiza exitosamente",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 200,
+            "intOpCode": "SUSDU200",
+            "message": "User deactivated successfully.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 401,
+          "intOpCode": "EUSAU401",
+          "message": "Invalid or missing user authentication",
+          "whenItHappens": "Cuando no hay token JWT válido o el claim NameIdentifier no puede extraerse",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 401,
+            "intOpCode": "EUSAU401",
+            "message": "Invalid or missing user authentication",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 403,
+          "intOpCode": "EUSFB403",
+          "message": "The user does not have the required permissions to perform this action.",
+          "whenItHappens": "Cuando el usuario autenticado no tiene el permiso Users.Delete",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 403,
+            "intOpCode": "EUSFB403",
+            "message": "The user does not have the required permissions to perform this action.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 404,
+          "intOpCode": "EUSNF404",
+          "message": "The user with the specified ID does not exist.",
+          "whenItHappens": "Cuando el usuario con el userId especificado no existe",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 404,
+            "intOpCode": "EUSNF404",
+            "message": "The user with the specified ID does not exist.",
+            "data": []
+          }
+        },
+        {
+          "statusCode": 400,
+          "intOpCode": "EUSBR400",
+          "message": "[Mensaje de error específico]",
+          "whenItHappens": "Cuando ocurre otro error durante la actualización del estado",
+          "responseBodyShape": {
+            "statusCode": "number",
+            "intOpCode": "string",
+            "message": "string",
+            "data": "array (vacío)"
+          },
+          "responseExample": {
+            "statusCode": 400,
+            "intOpCode": "EUSBR400",
+            "message": "Status update failed",
+            "data": []
+          }
+        }
+      ],
+      "businessRules": [
+        "El usuario autenticado debe tener permiso Users.Delete",
+        "El usuario objetivo debe existir en la base de datos",
+        "Si el usuario ya tiene el estado especificado, se retorna éxito sin hacer cambios",
+        "Los usuarios inactivos (Status=2) NO pueden hacer login",
+        "Este es un soft-delete, el usuario no se elimina de la base de datos",
+        "El endpoint se puede usar tanto para desactivar (Status=2) como para reactivar (Status=1)"
+      ],
+      "dependencies": {
+        "repositories": ["UserRepositorie"],
+        "services": [],
+        "helpers": [],
+        "entities": ["User"],
+        "claims": ["NameIdentifier (userId del usuario autenticado)"]
+      },
+      "frontendNotes": [
+        "Usar botón de 'Desactivar' para usuarios activos y 'Activar' para inactivos",
+        "Mostrar confirmación antes de cambiar el estado",
+        "El mensaje siempre dice 'deactivated' aunque se esté reactivando (inconsistencia en el mensaje)",
+        "Tras cambio exitoso, refrescar la lista de usuarios",
+        "Mostrar visualmente usuarios inactivos (ej: texto gris, ícono de 'bloqueado')",
+        "Considerar que usuarios inactivos no pueden hacer login",
+        "Enviar Status=2 para desactivar, Status=1 para reactivar",
+        "El método HTTP es DELETE pero no elimina permanentemente el usuario"
+      ],
+      "inferenceNotes": [
+        "El mensaje de éxito siempre dice 'User deactivated successfully' incluso si se está reactivando (Status=1)",
+        "La implementación permite idempotencia: si el usuario ya tiene el estado solicitado, retorna éxito"
+      ]
+    }
+  ],
+  "detectedInconsistencies": [
+    {
+      "endpoint": "create-user",
+      "issue": "Comentario 'Corresponde a' indica endpoint del gateway como '/', pero CreateUser crea usuarios, mientras que GET GetUsers consulta usuarios. Ambos mapean al mismo gateway endpoint '/'.",
+      "severity": "medium",
+      "recommendation": "Diferenciar los gateway endpoints: POST /users/ para crear y GET /users/ para listar está correcto por REST, pero asegurarse que el API Gateway distinga por método HTTP"
+    },
+    {
+      "endpoint": "update-user",
+      "issue": "Comentario 'Corresponde a' indica '/', pero UpdateUser usa PUT. Debería ser '/{userId}' según estándar REST.",
+      "severity": "low",
+      "recommendation": "Actualizar comentario a 'https://mi-gateway.onrender.com/users/{userId}'"
+    },
+    {
+      "endpoint": "get-user-by-id",
+      "issue": "La respuesta usa UserDto con snake_case (user_name, first_name, etc.) mientras otros endpoints usan PascalCase",
+      "severity": "low",
+      "recommendation": "Estandarizar el naming en todas las respuestas DTOs"
+    },
+    {
+      "endpoint": "deactivate-user",
+      "issue": "El mensaje de éxito siempre dice 'User deactivated successfully' incluso cuando se reactiva (Status=1)",
+      "severity": "low",
+      "recommendation": "Usar mensaje dinámico según el estado: 'User status updated successfully'"
+    },
+    {
+      "endpoint": "deactivate-user",
+      "issue": "Usa método HTTP DELETE pero la operación es realmente un PATCH/PUT de estado, no una eliminación",
+      "severity": "medium",
+      "recommendation": "Considerar cambiar a PATCH para mayor claridad semántica REST"
+    }
+  ]
+}
