@@ -143,20 +143,15 @@
   gap: 0.75rem;
   padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--p-surface-100);
-  transition: background 0.15s;
 }
 
 .permissions-item:last-child {
   border-bottom: none;
 }
 
-.permissions-item:hover {
-  background: var(--p-surface-50);
-}
-
 .permission-label {
   font-size: 0.9rem;
-  color: var(--p-surface-900);
+  color: var(--p-surface-0);
   cursor: pointer;
   user-select: none;
   font-family: monospace;
