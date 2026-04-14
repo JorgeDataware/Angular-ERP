@@ -144,22 +144,22 @@
 }
 
 :host ::ng-deep input[pInputText] {
-  color: var(--p-surface-900) !important;
+  color: var(--p-surface-0) !important;
 }
 
 :host ::ng-deep input[readonly] {
   background-color: var(--p-surface-100);
-  color: var(--p-surface-900) !important;
+  color: var(--p-surface-0) !important;
   cursor: default;
 }
 
 :host ::ng-deep .p-password .p-password-input {
-  color: var(--p-surface-900) !important;
+  color: var(--p-surface-0) !important;
 }
 
 :host ::ng-deep .p-password.p-disabled .p-password-input {
   background-color: var(--p-surface-100);
-  color: var(--p-surface-900) !important;
+  color: var(--p-surface-0) !important;
   cursor: default;
 }
 
